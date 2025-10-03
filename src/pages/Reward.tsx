@@ -16,17 +16,17 @@ import {
 
 export default function Reward() {
   const rewardStats = {
-    totalEarned: '8,567.23 ETHAN',
-    pendingRewards: '1,234.89 ETHAN',
+    totalEarned: '8,567.23 ETN',
+    pendingRewards: '1,234.89 ETN',
     nextRebase: '2h 34m',
-    claimableNow: '1,089.45 ETHAN'
+    claimableNow: '1,089.45 ETN'
   };
 
   const rewardHistory = [
     {
       id: '1',
       type: 'staking',
-      amount: '45.67 ETHAN',
+      amount: '45.67 ETN',
       timestamp: '2 hours ago',
       status: 'claimed',
       source: 'Staking Rewards'
@@ -34,7 +34,7 @@ export default function Reward() {
     {
       id: '2',
       type: 'bond',
-      amount: '123.45 ETHAN',
+      amount: '123.45 ETN',
       timestamp: '1 day ago',
       status: 'claimed',
       source: 'Bond Maturity'
@@ -42,7 +42,7 @@ export default function Reward() {
     {
       id: '3',
       type: 'staking',
-      amount: '42.33 ETHAN',
+      amount: '42.33 ETN',
       timestamp: '1 day ago',
       status: 'claimed',
       source: 'Staking Rewards'
@@ -50,7 +50,7 @@ export default function Reward() {
     {
       id: '4',
       type: 'governance',
-      amount: '10.00 ETHAN',
+      amount: '10.00 ETN',
       timestamp: '3 days ago',
       status: 'claimed',
       source: 'Governance Participation'
@@ -58,7 +58,7 @@ export default function Reward() {
     {
       id: '5',
       type: 'staking',
-      amount: '38.91 ETHAN',
+      amount: '38.91 ETN',
       timestamp: '3 days ago',
       status: 'claimed',
       source: 'Staking Rewards'
@@ -69,23 +69,23 @@ export default function Reward() {
     {
       id: '1',
       type: 'staking',
-      amount: '47.23 ETHAN',
+      amount: '47.23 ETN',
       timeUntil: '2h 34m',
       source: 'Next Rebase'
     },
     {
       id: '2',
       type: 'bond',
-      amount: '234.56 ETHAN',
+      amount: '234.56 ETN',
       timeUntil: '1 day 12h',
-      source: 'ETHAN-USDC Bond'
+      source: 'ETN-USDC Bond'
     },
     {
       id: '3',
       type: 'bond',
-      amount: '345.67 ETHAN',
+      amount: '345.67 ETN',
       timeUntil: '3 days 8h',
-      source: 'ETHAN-ETH LP Bond'
+      source: 'ETN-ETH LP Bond'
     }
   ];
 
@@ -124,7 +124,7 @@ export default function Reward() {
             Rewards
           </h1>
           <p className="text-gray-400">
-            Track and claim your ETHAN rewards from staking, bonds, and governance
+            Track and claim your ETN rewards from staking, bonds, and governance
           </p>
         </div>
 
@@ -214,7 +214,7 @@ export default function Reward() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold text-white">789.45 ETHAN</p>
+                            <p className="font-semibold text-white">789.45 ETN</p>
                             <Button size="sm" className="mt-1 bg-blue-600 hover:bg-blue-700">
                               Claim
                             </Button>
@@ -230,7 +230,7 @@ export default function Reward() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold text-white">300.00 ETHAN</p>
+                            <p className="font-semibold text-white">300.00 ETN</p>
                             <Button size="sm" className="mt-1 bg-purple-600 hover:bg-purple-700">
                               Claim
                             </Button>
@@ -308,7 +308,7 @@ export default function Reward() {
                       <TrendingUp className="w-4 h-4 text-blue-400" />
                       <span className="text-sm text-gray-300">Staking</span>
                     </div>
-                    <span className="text-sm font-medium text-white">7,234.56 ETHAN</span>
+                    <span className="text-sm font-medium text-white">7,234.56 ETN</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -316,7 +316,7 @@ export default function Reward() {
                       <Gift className="w-4 h-4 text-purple-400" />
                       <span className="text-sm text-gray-300">Bonds</span>
                     </div>
-                    <span className="text-sm font-medium text-white">1,322.67 ETHAN</span>
+                    <span className="text-sm font-medium text-white">1,322.67 ETN</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -324,7 +324,7 @@ export default function Reward() {
                       <CheckCircle className="w-4 h-4 text-green-400" />
                       <span className="text-sm text-gray-300">Governance</span>
                     </div>
-                    <span className="text-sm font-medium text-white">10.00 ETHAN</span>
+                    <span className="text-sm font-medium text-white">10.00 ETN</span>
                   </div>
                 </div>
                 
@@ -373,15 +373,15 @@ export default function Reward() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Today:</span>
-                    <span className="text-green-400">+89.45 ETHAN</span>
+                    <span className="text-green-400">+89.45 ETN</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">This week:</span>
-                    <span className="text-green-400">+634.23 ETHAN</span>
+                    <span className="text-green-400">+634.23 ETN</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">This month:</span>
-                    <span className="text-green-400">+2,456.78 ETHAN</span>
+                    <span className="text-green-400">+2,456.78 ETN</span>
                   </div>
                 </div>
               </CardContent>

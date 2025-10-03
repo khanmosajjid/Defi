@@ -147,7 +147,7 @@ export default function DAO() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
-            DAO Governance
+            Swap
           </h1>
           <p className="text-gray-400">
             Participate in protocol governance and shape the future of ETHAN

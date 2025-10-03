@@ -37,7 +37,7 @@ export default function Dashboard() {
     {
       id: '1',
       type: 'stake',
-      amount: '1,000 ETHAN',
+      amount: '1,000 ETN',
       hash: '0x1234...5678',
       timestamp: '2 hours ago',
       status: 'confirmed'
@@ -45,7 +45,7 @@ export default function Dashboard() {
     {
       id: '2',
       type: 'claim',
-      amount: '45.67 ETHAN',
+      amount: '45.67 ETN',
       hash: '0x2345...6789',
       timestamp: '1 day ago',
       status: 'confirmed'
@@ -53,7 +53,7 @@ export default function Dashboard() {
     {
       id: '3',
       type: 'bond',
-      amount: '500 ETHAN',
+      amount: '500 ETN',
       hash: '0x3456...7890',
       timestamp: '3 days ago',
       status: 'pending'
@@ -168,7 +168,7 @@ export default function Dashboard() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center p-4 bg-gray-800 rounded-lg">
                         <div>
-                          <p className="font-medium">ETHAN Staking Pool</p>
+                          <p className="font-medium">ETN Staking Pool</p>
                           <p className="text-sm text-gray-400">APY: {STATS.currentAPY}</p>
                         </div>
                         <div className="text-right">
@@ -183,7 +183,7 @@ export default function Dashboard() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center p-4 bg-gray-800 rounded-lg">
                         <div>
-                          <p className="font-medium">ETHAN-USDC Bond</p>
+                          <p className="font-medium">ETN-USDC Bond</p>
                           <p className="text-sm text-gray-400">5 days remaining</p>
                         </div>
                         <div className="text-right">
@@ -243,7 +243,7 @@ export default function Dashboard() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
                   <Button className="bg-yellow-500 hover:bg-yellow-600 text-black">
-                    Stake ETHAN
+                    Stake ETN
                   </Button>
                   <Button variant="outline" className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10">
                     Claim Rewards

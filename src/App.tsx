@@ -28,9 +28,36 @@ const App = () => (
               <Route path="/stake" element={<Stake />} />
               <Route path="/bond" element={<Bond />} />
               <Route path="/reward" element={<Reward />} />
-              <Route path="/dao" element={<DAO />} />
-              <Route path="/invite" element={<div className="min-h-screen bg-black text-white flex items-center justify-center"><h1 className="text-4xl text-yellow-400">Invite Page - Coming Soon</h1></div>} />
-              <Route path="/turbine" element={<div className="min-h-screen bg-black text-white flex items-center justify-center"><h1 className="text-4xl text-yellow-400">Turbine Page - Coming Soon</h1></div>} />
+              <Route
+                path="/swap"
+                element={
+                  <div className="min-h-screen bg-black text-white flex items-center justify-center">
+                    <h1 className="text-4xl text-yellow-400">
+                      Swap - Coming Soon
+                    </h1>
+                  </div>
+                }
+              />
+              <Route
+                path="/invite"
+                element={
+                  <div className="min-h-screen bg-black text-white flex items-center justify-center">
+                    <h1 className="text-4xl text-yellow-400">
+                      Invite Page - Coming Soon
+                    </h1>
+                  </div>
+                }
+              />
+              <Route
+                path="/turbine"
+                element={
+                  <div className="min-h-screen bg-black text-white flex items-center justify-center">
+                    <h1 className="text-4xl text-yellow-400">
+                      Turbine Page - Coming Soon
+                    </h1>
+                  </div>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

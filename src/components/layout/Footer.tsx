@@ -19,7 +19,7 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-gray-400 max-w-md">
-              The DeFi 3.0 protocol based on the algorithmic non-stable currency ETHAN makes the world's first private and anonymous payment ecosystem. Building a Web3 Integrated Financial Ecosystem.
+              The DeFi 3.0 protocol based on the algorithmic non-stable currency ETN makes the world's first private and anonymous payment ecosystem. Building a Web3 Integrated Financial Ecosystem.
             </p>
             <div className="flex space-x-4 mt-6">
               <a href="#" className="text-gray-400 hover:text-yellow-400 transition-colors">

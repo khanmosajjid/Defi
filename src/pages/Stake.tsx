@@ -21,17 +21,17 @@ export default function Stake() {
   const stakingPools = [
     {
       id: '1',
-      name: 'ETHAN Single Stake',
+      name: 'ETN Single Stake',
       apy: STATS.currentAPY,
       totalStaked: STATS.totalStaked,
       userStaked: '15,234.56',
       rewardRate: STATS.rebaseRate,
       lockPeriod: 'No lock',
-      description: 'Stake ETHAN tokens and earn compound interest every 8 hours'
+      description: 'Stake ETN tokens and earn compound interest every 8 hours'
     },
     {
       id: '2',
-      name: 'ETHAN-USDC LP',
+      name: 'ETN-USDC LP',
       apy: '892.45%',
       totalStaked: '89,456,123.45',
       userStaked: '5,678.90',
@@ -42,10 +42,10 @@ export default function Stake() {
   ];
 
   const userStats = {
-    totalStaked: '20,913.46 ETHAN',
-    pendingRewards: '1,234.89 ETHAN',
+    totalStaked: '20,913.46 ETN',
+    pendingRewards: '1,234.89 ETN',
     nextRebase: '2h 34m',
-    totalRewards: '8,567.23 ETHAN'
+    totalRewards: '8,567.23 ETN'
   };
 
   const calculateRewards = (amount: string) => {
@@ -63,7 +63,7 @@ export default function Stake() {
             Staking
           </h1>
           <p className="text-gray-400">
-            Stake ETHAN tokens and earn compound interest rewards every 8 hours
+            Stake ETN tokens and earn compound interest rewards every 8 hours
           </p>
         </div>
 
@@ -109,7 +109,7 @@ export default function Stake() {
           <div className="lg:col-span-2">
             <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
               <CardHeader>
-                <CardTitle className="text-yellow-400">Stake ETHAN Tokens</CardTitle>
+                <CardTitle className="text-yellow-400">Stake ETN Tokens</CardTitle>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="stake" className="w-full">
@@ -131,11 +131,11 @@ export default function Stake() {
                             className="bg-gray-800 border-gray-700 text-white pr-20"
                           />
                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-yellow-400 font-medium">
-                            ETHAN
+                            ETN
                           </div>
                         </div>
                         <div className="flex justify-between text-sm text-gray-400 mt-2">
-                          <span>Balance: 25,000 ETHAN</span>
+                          <span>Balance: 25,000 ETN</span>
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -151,11 +151,11 @@ export default function Stake() {
                         <div className="bg-gray-800 p-4 rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-400">Daily Rewards:</span>
-                            <span className="text-green-400">+{calculateRewards(stakeAmount)} ETHAN</span>
+                            <span className="text-green-400">+{calculateRewards(stakeAmount)} ETN</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-400">Monthly Rewards:</span>
-                            <span className="text-green-400">+{(parseFloat(calculateRewards(stakeAmount)) * 30).toFixed(2)} ETHAN</span>
+                            <span className="text-green-400">+{(parseFloat(calculateRewards(stakeAmount)) * 30).toFixed(2)} ETN</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-400">APY:</span>
@@ -168,7 +168,7 @@ export default function Stake() {
                         className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
                         disabled={!stakeAmount || parseFloat(stakeAmount) <= 0}
                       >
-                        Stake ETHAN
+                        Stake ETN
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </div>
@@ -187,11 +187,11 @@ export default function Stake() {
                             className="bg-gray-800 border-gray-700 text-white pr-20"
                           />
                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-yellow-400 font-medium">
-                            sETHAN
+                            sETN
                           </div>
                         </div>
                         <div className="flex justify-between text-sm text-gray-400 mt-2">
-                          <span>Staked: 20,913.46 sETHAN</span>
+                          <span>Staked: 20,913.46 sETN</span>
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -220,7 +220,7 @@ export default function Stake() {
                         className="w-full border-red-500/20 text-red-400 hover:bg-red-500/10"
                         disabled={!unstakeAmount || parseFloat(unstakeAmount) <= 0}
                       >
-                        Unstake sETHAN
+                        Unstake sETN
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </div>

@@ -19,9 +19,9 @@ export const NAVIGATION_ITEMS = [
   { name: 'BOND', path: '/bond', icon: '🔗' },
   { name: 'STAKE', path: '/stake', icon: '🥩' },
   { name: 'REWARD', path: '/reward', icon: '🎁' },
-  { name: 'DAO', path: '/dao', icon: '🏛️' },
-  { name: 'INVITE', path: '/invite', icon: '👥' },
-  { name: 'TURBINE', path: '/turbine', icon: '⚡' },
+  { name: 'Swap', path: '/swap', icon: '🏛️' },
+  // { name: 'INVITE', path: '/invite', icon: '👥' },
+  // { name: 'TURBINE', path: '/turbine', icon: '⚡' },
 ] as const;
 
 export const STATS = {

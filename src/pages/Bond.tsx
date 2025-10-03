@@ -22,7 +22,7 @@ export default function Bond() {
   const bonds = [
     {
       id: '1',
-      name: 'ETHAN-USDC Reserve Bond',
+      name: 'ETN-USDC Reserve Bond',
       type: 'reserve',
       discountRate: '5.67%',
       price: '$0.943',
@@ -30,13 +30,13 @@ export default function Bond() {
       vestingTerm: '5 days',
       maxPayout: '1.2%',
       available: true,
-      description: 'Bond USDC to receive discounted ETHAN tokens',
+      description: 'Bond USDC to receive discounted ETN tokens',
       bondToken: 'USDC',
-      payoutToken: 'ETHAN'
+      payoutToken: 'ETN'
     },
     {
       id: '2',
-      name: 'ETHAN-ETH Liquidity Bond',
+      name: 'ETN-ETH Liquidity Bond',
       type: 'liquidity',
       discountRate: '8.23%',
       price: '$0.918',
@@ -44,9 +44,9 @@ export default function Bond() {
       vestingTerm: '5 days',
       maxPayout: '0.8%',
       available: true,
-      description: 'Bond LP tokens to receive discounted ETHAN',
-      bondToken: 'ETHAN-ETH LP',
-      payoutToken: 'ETHAN'
+      description: 'Bond LP tokens to receive discounted ETN',
+      bondToken: 'ETN-ETH LP',
+      payoutToken: 'ETN'
     },
     {
       id: '3',
@@ -58,36 +58,36 @@ export default function Bond() {
       vestingTerm: '5 days',
       maxPayout: '1.5%',
       available: false,
-      description: 'Bond DAI to receive discounted ETHAN tokens',
+      description: 'Bond DAI to receive discounted ETN tokens',
       bondToken: 'DAI',
-      payoutToken: 'ETHAN'
+      payoutToken: 'ETN'
     }
   ];
 
   const userBonds = [
     {
       id: '1',
-      bondName: 'ETHAN-USDC Reserve',
-      amount: '1,000 ETHAN',
-      payout: '1,060 ETHAN',
+      bondName: 'ETN-USDC Reserve',
+      amount: '1,000 ETN',
+      payout: '1,060 ETN',
       vestingProgress: 60,
       timeRemaining: '2 days',
-      claimable: '636 ETHAN'
+      claimable: '636 ETN'
     },
     {
       id: '2',
-      bondName: 'ETHAN-ETH Liquidity',
-      amount: '500 ETHAN',
-      payout: '545 ETHAN',
+      bondName: 'ETN-ETH Liquidity',
+      amount: '500 ETN',
+      payout: '545 ETN',
       vestingProgress: 100,
       timeRemaining: 'Ready',
-      claimable: '545 ETHAN'
+      claimable: '545 ETN'
     }
   ];
 
   const bondStats = {
-    totalBonded: '15,234.56 ETHAN',
-    pendingPayout: '2,181 ETHAN',
+    totalBonded: '15,234.56 ETN',
+    pendingPayout: '2,181 ETN',
     totalROI: '+12.34%',
     activeBonds: '2'
   };
@@ -108,7 +108,7 @@ export default function Bond() {
             Bonds
           </h1>
           <p className="text-gray-400">
-            Purchase bonds at a discount and receive ETHAN tokens after vesting period
+            Purchase bonds at a discount and receive ETN tokens after vesting period
           </p>
         </div>
 
@@ -141,7 +141,7 @@ export default function Bond() {
           <StatCard
             title="Best ROI Available"
             value="8.94%"
-            change="ETHAN-ETH LP"
+            change="ETN-ETH LP"
             changeType="positive"
             icon={<Target className="w-5 h-5" />}
             description="Highest return"
@@ -246,7 +246,7 @@ export default function Bond() {
                               {calculatePayout(
                                 bondAmount, 
                                 bonds.find(b => b.id === selectedBond)?.discountRate || '0'
-                              )} ETHAN
+                              )} ETN
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
@@ -351,7 +351,7 @@ export default function Bond() {
                   </div>
                   <div className="flex items-start space-x-2">
                     <Info className="w-4 h-4 text-yellow-400 mt-0.5" />
-                    <p>Claim your ETHAN tokens as they vest</p>
+                    <p>Claim your ETN tokens as they vest</p>
                   </div>
                   <div className="flex items-start space-x-2">
                     <Info className="w-4 h-4 text-yellow-400 mt-0.5" />

@@ -27,7 +27,7 @@ export default function Header() {
             className="h-10 w-10 rounded-full border-2 border-yellow-500"
           />
           <span className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-            ETHAN
+            ETN
           </span>
         </Link>
 

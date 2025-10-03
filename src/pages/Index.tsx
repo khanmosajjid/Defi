@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import StatCard from '@/components/common/StatCard';
 import { 
   ArrowRight, 
@@ -37,13 +38,13 @@ export default function Index() {
     {
       icon: <Shield className="w-8 h-8" />,
       title: 'Reserve & Liquidity Bonds',
-      description: 'Purchase bonds at discounted rates and receive ETHAN tokens after vesting. Secure treasury backing with algorithmic pricing.',
+      description: 'Purchase bonds at discounted rates and receive ETN tokens after vesting. Secure treasury backing with algorithmic pricing.',
       highlight: 'Up to 8% Discount'
     },
     {
       icon: <Zap className="w-8 h-8" />,
       title: 'DAO Governance',
-      description: 'Participate in protocol governance and shape the future of ETHAN. Vote on proposals and earn governance rewards.',
+      description: 'Participate in protocol governance and shape the future of ETN. Vote on proposals and earn governance rewards.',
       highlight: 'Community Driven'
     },
     {
@@ -62,8 +63,8 @@ export default function Index() {
     },
     {
       number: '02',
-      title: 'Stake ETHAN',
-      description: 'Stake your ETHAN tokens and start earning compound interest'
+      title: 'Stake ETN',
+      description: 'Stake your ETN tokens and start earning compound interest'
     },
     {
       number: '03',
@@ -104,7 +105,7 @@ export default function Index() {
                 Web3 Integrated Financial Ecosystem
               </p>
               <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-                The DeFi 3.0 protocol based on algorithmic non-stable currency ETHAN makes the world's first private and anonymous payment ecosystem
+                The DeFi 3.0 protocol based on algorithmic non-stable currency ETN makes the world's first private and anonymous payment ecosystem
               </p>
             </div>
 
@@ -115,11 +116,7 @@ export default function Index() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <Link to="/dashboard">
-                <Button size="lg" variant="outline" className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10 px-8 py-4 text-lg">
-                  Launch App
-                </Button>
-              </Link>
+             <ConnectButton />
             </div>
 
             {/* Animated Stats */}
@@ -150,7 +147,7 @@ export default function Index() {
               How to Participate
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Discover the innovative features that make ETHAN the future of decentralized finance
+              Discover the innovative features that make ETN the future of decentralized finance
             </p>
           </div>
 
@@ -210,7 +207,7 @@ export default function Index() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-gray-300">
-                  Purchase bonds at discounted rates and receive ETHAN tokens after vesting. 
+                  Purchase bonds at discounted rates and receive ETN tokens after vesting. 
                   Support the treasury while earning premium returns.
                 </p>
                 <div className="flex justify-between text-sm">
@@ -233,10 +230,10 @@ export default function Index() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-white mb-4">
-              ETHAN's Inner Workings
+              ETN Inner Workings
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Simple steps to start earning with the ETHAN ecosystem
+              Simple steps to start earning with the ETN ecosystem
             </p>
           </div>
 
@@ -264,7 +261,7 @@ export default function Index() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
-              title="Total ETHAN Staked"
+              title="Total ETN Staked"
               value={STATS.totalStaked}
               icon={<Coins className="w-5 h-5" />}
               description="Tokens earning rewards"
@@ -334,7 +331,7 @@ export default function Index() {
               Ready to Start Your DeFi Journey?
             </h2>
             <p className="text-xl text-gray-400 mb-8">
-              Join thousands of users earning passive income with ETHAN's innovative DeFi 3.0 protocol
+              Join thousands of users earning passive income with ETN innovative DeFi 3.0 protocol
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/stake">
@@ -343,9 +340,9 @@ export default function Index() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <Link to="/dao">
+              <Link to="/swap">
                 <Button size="lg" variant="outline" className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10 px-8 py-4">
-                  Join DAO
+                  Swap
                 </Button>
               </Link>
             </div>
