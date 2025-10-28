@@ -1,4 +1,4 @@
-import { Toaster } from '@/components/ui/sonner';
+
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { WalletProvider } from '@/providers/WalletProvider';
@@ -13,6 +13,8 @@ import Bond from './pages/Bond';
 import Reward from './pages/Reward';
 import DAO from './pages/DAO';
 import NotFound from './pages/NotFound';
+import { Toaster } from 'react-hot-toast';
+
 
 const App = () => (
   <WalletProvider>

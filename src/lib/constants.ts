@@ -25,13 +25,13 @@ export const NAVIGATION_ITEMS = [
 ] as const;
 
 export const STATS = {
-  totalStaked: '269,269,262.74',
-  treasuryBalance: '$323,476,741',
-  marketValue: '$3,410,245,168',
-  currentAPY: '1,443.664%',
-  stakingAPY: '7,909%',
-  rebaseRate: '0.4%',
-  rebaseInterval: '8 hours',
+  totalStaked: '0.0',
+  treasuryBalance: '$0.0',
+  marketValue: '$0',
+  currentAPY: '0',
+  stakingAPY: '0',
+  rebaseRate: '0',
+  rebaseInterval: '0',
 } as const;
 
 export const TOKEN_INFO = {
@@ -40,3 +40,91 @@ export const TOKEN_INFO = {
   decimals: 18,
   totalSupply: '1000000000',
 } as const;
+
+export const CONTRACT_ADDRESSES = {
+  stakingPlatform: '0xf8C64BbA28493a78db3cc2A4Ab100f1a64e65315',
+  token: '0x3e88cff91778BAC662C3d912bF575493828Ac9Cf',
+} as const;
+
+export const PANCAKESWAP_V2_ADDRESSES = {
+  ROUTER: '0xD99D1c33F9fC3444f8101754aBC46c52416550D1', // PancakeSwap V2 Router on BSC Testnet
+  FACTORY: '0x6725F303b657a9451d8BA641348b6761A6CC7a17', // PancakeSwap V2 Factory on BSC Testnet
+}
+
+// ERC20 ABI for token operations
+export const ERC20_ABI = [
+  {
+    "constant": true,
+    "inputs": [{ "name": "_owner", "type": "address" }],
+    "name": "balanceOf",
+    "outputs": [{ "name": "balance", "type": "uint256" }],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "_spender", "type": "address" },
+      { "name": "_value", "type": "uint256" }
+    ],
+    "name": "approve",
+    "outputs": [{ "name": "", "type": "bool" }],
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      { "name": "_owner", "type": "address" },
+      { "name": "_spender", "type": "address" }
+    ],
+    "name": "allowance",
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{ "name": "", "type": "uint8" }],
+    "type": "function"
+  }
+] as const
+
+// Official PancakeSwap V2 Router ABI - Exact functions from deployed contract
+export const PANCAKESWAP_V2_ROUTER_ABI = [
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" }
+    ],
+    "name": "getAmountsOut",
+    "outputs": [{ "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+    ],
+    "name": "swapExactTokensForTokens",
+    "outputs": [{ "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "internalType": "uint256", "name": "amountOutMin", "type": "uint256" },
+      { "internalType": "address[]", "name": "path", "type": "address[]" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
+    ],
+    "name": "swapExactTokensForTokensSupportingFeeOnTransferTokens",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+] as const

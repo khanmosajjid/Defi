@@ -82,7 +82,7 @@ export default function Footer() {
 
         <div className="border-t border-yellow-500/20 mt-8 pt-8 text-center">
           <p className="text-gray-400">
-            Copyright © 2024-2025 ETHANWorld.org. All rights reserved. Version 2.6.11
+            Copyright © 2024-2025 ETHANWorld.org.
           </p>
         </div>
       </div>
