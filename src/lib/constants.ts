@@ -42,7 +42,7 @@ export const TOKEN_INFO = {
 } as const;
 
 export const CONTRACT_ADDRESSES = {
-  stakingPlatform: '0xf8C64BbA28493a78db3cc2A4Ab100f1a64e65315',
+  stakingPlatform: '0x31348E9660E25F8aA471690d5F969Ec63E1158aE',
   token: '0x3e88cff91778BAC662C3d912bF575493828Ac9Cf',
 } as const;
 

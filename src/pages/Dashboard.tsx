@@ -29,6 +29,15 @@ export default function Dashboard() {
     userLevel,
     userRewardPercent,
     refetchTotalStaked,
+    userRank,
+    levelInfo,
+    rankInfo,
+    fetchUserBonds,
+    userReport,
+    directsList,
+    fetchUserLevelIncome,
+    fetchUserActivity,
+    fetchDownlinesByLevel,
   } = useStakingContract();
 
   // derive user-facing stats from on-chain data
@@ -55,14 +64,126 @@ export default function Dashboard() {
     monthly: "+28.91%",
   };
 
-  const recentTransactions: Array<{
-    id: string;
-    type: string;
-    amount: string;
-    hash?: string;
-    timestamp?: string;
-    status?: string;
-  }> = [];
+  // Activity state
+  const [activity, setActivity] = useState<
+    Array<{
+      kind: string;
+      txHash: string;
+      blockNumber: number;
+      amount?: string;
+      counterparty?: string;
+    }>
+  >([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  async function loadActivity() {
+    try {
+      setLoadingActivity(true);
+      let items = await fetchUserActivity({
+        maxBlocksBack: 500_000,
+        includeToken: true,
+        includeApprovals: true,
+      });
+      if (!items || items.length === 0) {
+        // fallback: scan deeper
+        items = await fetchUserActivity({
+          maxBlocksBack: 1_000_000,
+          includeToken: true,
+          includeApprovals: true,
+        });
+      }
+      setActivity(items);
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoadingActivity(false);
+    }
+  }
+
+  // bonds state & helpers
+  const [bonds, setBonds] = useState<
+    Array<{
+      index: number;
+      planId: number;
+      amount: string;
+      amountHuman: string;
+      startAt: number;
+      endAt: number;
+      withdrawn: boolean;
+      duration: string;
+      rewardPercent: number;
+      status: "Active" | "Matured" | "Withdrawn";
+    }>
+  >([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await fetchUserBonds();
+        if (mounted) setBonds(list);
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [fetchUserBonds]);
+
+  const totalBondAmountHuman = (() => {
+    try {
+      let sum = 0n;
+      for (const b of bonds) sum += BigInt(b.amount || "0");
+      return (Number(sum / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  })();
+
+  const formatUsd18 = (v?: string) => {
+    try {
+      if (!v) return "$0.00";
+      const bn = BigInt(v);
+      const whole = bn / 10n ** 18n;
+      const frac = Number(bn % 10n ** 18n) / 1e18;
+      const val = Number(whole) + frac;
+      return `$${val.toFixed(2)}`;
+    } catch {
+      return "$0.00";
+    }
+  };
+
+  // per-level income
+  const [levelIncome, setLevelIncome] = useState<string[]>([]);
+  useEffect(() => {
+    const mounted = true;
+    (async () => {
+      try {
+        const arr = await fetchUserLevelIncome();
+        if (mounted) setLevelIncome(arr);
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => {
+      // no-op cleanup
+    };
+  }, [fetchUserLevelIncome]);
+
+  // Team by level state
+  const [teamLevels, setTeamLevels] = useState<Record<number, string[]>>({});
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  async function loadTeam() {
+    try {
+      setLoadingTeam(true);
+      const data = await fetchDownlinesByLevel();
+      setTeamLevels(data);
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoadingTeam(false);
+    }
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -79,14 +200,25 @@ export default function Dashboard() {
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
-      case "stake":
+      case "STAKE":
         return <ArrowUpRight className="w-4 h-4 text-blue-400" />;
-      case "unstake":
+      case "UNSTAKE":
         return <ArrowDownRight className="w-4 h-4 text-red-400" />;
-      case "claim":
+      case "CLAIM":
         return <Gift className="w-4 h-4 text-green-400" />;
-      case "bond":
+      case "BOND_BUY":
+      case "BOND_WITHDRAW":
         return <Coins className="w-4 h-4 text-yellow-400" />;
+      case "REFERRAL_IN":
+        return <ArrowUpRight className="w-4 h-4 text-green-400" />;
+      case "REFERRAL_OUT":
+        return <ArrowDownRight className="w-4 h-4 text-yellow-400" />;
+      case "TOKEN_TRANSFER_IN":
+        return <ArrowUpRight className="w-4 h-4 text-purple-400" />;
+      case "TOKEN_TRANSFER_OUT":
+        return <ArrowDownRight className="w-4 h-4 text-purple-400" />;
+      case "TOKEN_APPROVAL":
+        return <ArrowUpRight className="w-4 h-4 text-gray-400" />;
       default:
         return <ArrowUpRight className="w-4 h-4 text-gray-400" />;
     }
@@ -132,12 +264,12 @@ export default function Dashboard() {
             description="Accumulated rewards"
           />
           <StatCard
-            title="Bond Value"
-            value={userStats.bondValue}
-            change="5 days remaining"
+            title="Bonds"
+            value={`${totalBondAmountHuman} ETN`}
+            change={`${bonds.length} position${bonds.length === 1 ? "" : "s"}`}
             changeType="neutral"
             icon={<Coins className="w-5 h-5" />}
-            description="Vesting bonds"
+            description="Your bond positions"
           />
         </div>
 
@@ -152,40 +284,12 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="overview" className="w-full">
+                <Tabs defaultValue="staking" className="w-full">
                   <TabsList className="grid w-full grid-cols-3 bg-gray-800">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="staking">Staking</TabsTrigger>
+                    <TabsTrigger value="profile">Profile</TabsTrigger>
                     <TabsTrigger value="bonds">Bonds</TabsTrigger>
                   </TabsList>
-
-                  <TabsContent value="overview" className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-sm text-gray-400">24h Change</p>
-                        <p className="text-lg font-semibold text-green-400">
-                          {portfolioChange.daily}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400">7d Change</p>
-                        <p className="text-lg font-semibold text-green-400">
-                          {portfolioChange.weekly}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400">30d Change</p>
-                        <p className="text-lg font-semibold text-green-400">
-                          {portfolioChange.monthly}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="h-48 bg-gray-800 rounded-lg flex items-center justify-center">
-                      <p className="text-gray-400">
-                        Portfolio Chart Placeholder
-                      </p>
-                    </div>
-                  </TabsContent>
 
                   <TabsContent value="staking" className="space-y-4">
                     <div className="space-y-3">
@@ -193,7 +297,10 @@ export default function Dashboard() {
                         <div>
                           <p className="font-medium">ETN Staking Pool</p>
                           <p className="text-sm text-gray-400">
-                            APY: {STATS.currentAPY}
+                            APY:{" "}
+                            {userRewardPercent && userLevel > 0
+                              ? `${userRewardPercent}%`
+                              : STATS.currentAPY}
                           </p>
                         </div>
                         <div className="text-right">
@@ -208,20 +315,311 @@ export default function Dashboard() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="bonds" className="space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center p-4 bg-gray-800 rounded-lg">
+                  <TabsContent value="profile" className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-gray-800 rounded-lg">
+                        <p className="text-sm text-gray-400">Level</p>
+                        <p className="text-lg font-semibold">
+                          {userLevel && userLevel > 0
+                            ? `L${userLevel}`
+                            : "None"}
+                        </p>
+                        {levelInfo && (
+                          <div className="mt-2 text-sm text-gray-300 space-y-1">
+                            <p>
+                              Reward:{" "}
+                              <span className="text-yellow-400">
+                                {levelInfo.rewardPercent}%
+                              </span>
+                            </p>
+                            <p>
+                              Directs required:{" "}
+                              <span className="text-yellow-400">
+                                {levelInfo.directsReq}
+                              </span>
+                            </p>
+                            <p>
+                              Self stake req:{" "}
+                              <span className="text-yellow-400">
+                                {formatUsd18(levelInfo.selfStakeUsdReq)}
+                              </span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4 bg-gray-800 rounded-lg">
+                        <p className="text-sm text-gray-400">Rank</p>
+                        <p className="text-lg font-semibold">
+                          {userRank && userRank > 0 ? `R${userRank}` : "None"}
+                        </p>
+                        {rankInfo && (
+                          <div className="mt-2 text-sm text-gray-300 space-y-1">
+                            <p>
+                              Company Share:{" "}
+                              <span className="text-yellow-400">
+                                {rankInfo.companySharePercent}%
+                              </span>
+                            </p>
+                            <p>
+                              Directs required:{" "}
+                              <span className="text-yellow-400">
+                                {rankInfo.directReq}
+                              </span>
+                            </p>
+                            <p>
+                              Top-3 income req:{" "}
+                              <span className="text-yellow-400">
+                                {formatUsd18(rankInfo.incomeReqFromTop3Usd)}
+                              </span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-gray-800 rounded-lg">
+                      <p className="text-sm text-gray-400">Referral</p>
+                      <div className="mt-1 text-sm text-gray-300">
+                        <p>
+                          Referrer:{" "}
+                          <span className="text-yellow-400">
+                            {userInfo?.referrerShort ?? "No referrer"}
+                          </span>
+                        </p>
+                        <p>
+                          Directs:{" "}
+                          <span className="text-yellow-400">
+                            {userInfo?.directs ?? 0}
+                          </span>
+                        </p>
+                        <p>
+                          Total referral income:{" "}
+                          <span className="text-yellow-400">
+                            {formatWeiToETN(userInfo?.totalReferralIncome)} ETN
+                          </span>
+                        </p>
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-sm text-gray-400 mb-1">
+                          Direct Referrals
+                        </p>
+                        {directsList && directsList.length > 0 ? (
+                          <ul className="space-y-1">
+                            {directsList.map((addr) => (
+                              <li
+                                key={addr}
+                                className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                              >
+                                <span className="text-gray-200">
+                                  {addr.slice(0, 6)}...{addr.slice(-4)}
+                                </span>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await navigator.clipboard.writeText(addr);
+                                    } catch (e) {
+                                      // ignore clipboard errors
+                                    }
+                                  }}
+                                  className="text-xs text-yellow-400 hover:underline"
+                                >
+                                  Copy
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-gray-500">No directs yet</p>
+                        )}
+                      </div>
+                      {/* Income by Level */}
+                      <div className="mt-3">
+                        <p className="text-sm text-gray-400 mb-1">
+                          Income by level
+                        </p>
+                        {levelIncome && levelIncome.some((v) => v !== "0") ? (
+                          <ul className="space-y-1">
+                            {levelIncome.map((v, i) => {
+                              if (!v || v === "0") return null;
+                              let human = "0";
+                              try {
+                                human = (
+                                  Number(BigInt(v) / 10n ** 15n) / 1000
+                                ).toLocaleString();
+                              } catch (e) {
+                                /* ignore */
+                              }
+                              return (
+                                <li
+                                  key={i}
+                                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                                >
+                                  <span className="text-gray-200">
+                                    L{i + 1}
+                                  </span>
+                                  <span className="text-yellow-400">
+                                    {human} ETN
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-gray-500">No level income yet</p>
+                        )}
+                      </div>
+                      {/* Team by Level */}
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm text-gray-400">Team by level</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+                            onClick={loadTeam}
+                            disabled={loadingTeam}
+                          >
+                            {loadingTeam
+                              ? "Loading…"
+                              : Object.keys(teamLevels).length
+                              ? "Refresh"
+                              : "Load"}
+                          </Button>
+                        </div>
+                        {Object.keys(teamLevels).length ? (
+                          <div className="space-y-2">
+                            {Object.entries(teamLevels).map(([lvl, addrs]) => (
+                              <div
+                                key={lvl}
+                                className="bg-gray-900/60 rounded p-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-200">
+                                    Level {lvl}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400">
+                                      {addrs.length} member
+                                      {addrs.length === 1 ? "" : "s"}
+                                    </span>
+                                    <span className="text-xs text-yellow-400">
+                                      {(() => {
+                                        try {
+                                          const idx = Number(lvl) - 1;
+                                          const v = levelIncome?.[idx] ?? "0";
+                                          if (!v || v === "0") return "0 ETN";
+                                          const human = (
+                                            Number(BigInt(v) / 10n ** 15n) /
+                                            1000
+                                          ).toLocaleString();
+                                          return `${human} ETN`;
+                                        } catch {
+                                          return "0 ETN";
+                                        }
+                                      })()}
+                                    </span>
+                                  </div>
+                                </div>
+                                {addrs.length > 0 && (
+                                  <ul className="mt-1 grid grid-cols-1 gap-1">
+                                    {addrs.map((addr) => (
+                                      <li
+                                        key={addr}
+                                        className="flex items-center justify-between bg-gray-950/50 px-2 py-1 rounded"
+                                      >
+                                        <span className="text-gray-300">
+                                          {addr.slice(0, 6)}...{addr.slice(-4)}
+                                        </span>
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              await navigator.clipboard.writeText(
+                                                addr
+                                              );
+                                            } catch (e) {
+                                              /* ignore */
+                                            }
+                                          }}
+                                          className="text-xs text-yellow-400 hover:underline"
+                                        >
+                                          Copy
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-gray-500">
+                            Load to see your team across unlocked levels
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-gray-800 rounded-lg">
+                      <p className="text-sm text-gray-400">User report</p>
+                      <div className="grid grid-cols-2 gap-3 mt-2 text-sm text-gray-300">
                         <div>
-                          <p className="font-medium">ETN-USDC Bond</p>
-                          <p className="text-sm text-gray-400">
-                            5 days remaining
+                          <p className="text-gray-400">Total earned</p>
+                          <p className="text-yellow-400 font-medium">
+                            {formatWeiToETN(userReport?.totalEarned)} ETN
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium">{userStats.bondValue}</p>
-                          <p className="text-sm text-yellow-400">Vesting</p>
+                        <div>
+                          <p className="text-gray-400">Total claimed</p>
+                          <p className="text-yellow-400 font-medium">
+                            {formatWeiToETN(userReport?.totalClaimed)} ETN
+                          </p>
                         </div>
                       </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="bonds" className="space-y-4">
+                    <div className="space-y-3">
+                      {bonds.length === 0 ? (
+                        <div className="p-4 bg-gray-800 rounded-lg text-gray-400">
+                          No bonds found
+                        </div>
+                      ) : (
+                        bonds.map((b) => {
+                          const remaining = Math.max(
+                            0,
+                            b.endAt - Math.floor(Date.now() / 1000)
+                          );
+                          const days = Math.floor(remaining / 86400);
+                          return (
+                            <div
+                              key={b.index}
+                              className="flex justify-between items-center p-4 bg-gray-800 rounded-lg"
+                            >
+                              <div>
+                                <p className="font-medium">
+                                  Plan #{b.planId} • {b.status}
+                                </p>
+                                <p className="text-sm text-gray-400">
+                                  {days > 0
+                                    ? `${days} day${
+                                        days === 1 ? "" : "s"
+                                      } remaining`
+                                    : b.status === "Active"
+                                    ? "Matures today"
+                                    : b.status}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium">
+                                  {b.amountHuman} ETN
+                                </p>
+                                <p className="text-sm text-yellow-400">
+                                  Reward {b.rewardPercent}%
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>
@@ -239,28 +637,42 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {recentTransactions.map((tx) => (
+                  {!loadingActivity && activity.length === 0 && (
+                    <div className="p-3 bg-gray-800 rounded text-gray-400">
+                      No activity yet. Click "Load Activity" to fetch recent
+                      events.
+                    </div>
+                  )}
+                  {activity.map((tx) => (
                     <div
-                      key={tx.id}
+                      key={tx.txHash}
                       className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
                     >
                       <div className="flex items-center space-x-3">
-                        {getTransactionIcon(tx.type)}
+                        {getTransactionIcon(tx.kind)}
                         <div>
-                          <p className="font-medium capitalize">{tx.type}</p>
-                          <p className="text-sm text-gray-400">
-                            {tx.timestamp}
+                          <p className="font-medium capitalize">
+                            {tx.kind.replace(/_/g, " ")}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            #{tx.blockNumber}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">{tx.amount}</p>
-                        <div className="flex items-center space-x-1">
-                          {getStatusIcon(tx.status)}
-                          <span className="text-xs text-gray-400 capitalize">
-                            {tx.status}
-                          </span>
-                        </div>
+                        <p className="font-medium">
+                          {tx.amount
+                            ? `${
+                                Number(BigInt(tx.amount) / 10n ** 15n) / 1000
+                              } ETN`
+                            : "-"}
+                        </p>
+                        {tx.counterparty && (
+                          <p className="text-xs text-gray-400">
+                            {tx.counterparty.slice(0, 6)}...
+                            {tx.counterparty.slice(-4)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -269,8 +681,14 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   className="w-full mt-4 border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+                  onClick={loadActivity}
+                  disabled={loadingActivity}
                 >
-                  View All Transactions
+                  {loadingActivity
+                    ? "Loading…"
+                    : activity.length
+                    ? "Refresh Activity"
+                    : "Load Activity"}
                 </Button>
               </CardContent>
             </Card>
@@ -296,12 +714,6 @@ export default function Dashboard() {
                     className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
                   >
                     Buy Bonds
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
-                  >
-                    Vote in DAO
                   </Button>
                 </div>
               </CardContent>

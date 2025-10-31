@@ -22,6 +22,7 @@ export default function Stake() {
     stake: stakeTx,
     tokenBalance,
     userInfo,
+    userReport,
     refetchUserInfo,
     refetchPendingRewards,
     pendingRewards: pendingRewardsRaw,
@@ -70,6 +71,15 @@ export default function Stake() {
       ? pendingRewardsRaw
       : pendingComputed || (userInfo && userInfo.rewardDebt) || "0";
   const directs = userInfo?.directs ?? 0;
+  const totalIncome = userReport?.totalEarned ?? "0";
+  const totalIncomeHuman = (() => {
+    try {
+      const bn = BigInt(totalIncome);
+      return (Number(bn / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  })();
   const referrerAddr = userInfo?.referrerShort ?? "No referrer";
 
   // Determine if a referrer is registered on-chain (safe string coercion)
@@ -92,8 +102,6 @@ export default function Stake() {
       const qp = new URLSearchParams(window.location.search);
       const r = qp.get("ref");
       if (r && typeof r === "string" && r.startsWith("0x")) {
-        setRefFromUrl(r);
-        // if user has no registered referrer yet, prefill the input
         if (!hasRegisteredReferrer && !referralAddress) {
           setReferralAddress(r);
         }
@@ -139,8 +147,6 @@ export default function Stake() {
       ref = referralAddress?.trim() ?? "";
       if (!ref || !ref.startsWith("0x")) ref = connectedAddress ?? "";
     }
-
-    setIsProcessing(true);
 
     try {
       const balanceBig = BigInt(tokenBalance || "0");
@@ -241,7 +247,7 @@ export default function Stake() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
           <StatCard
             title="Your Staked Amount"
             value={
@@ -281,6 +287,22 @@ export default function Stake() {
             changeType="neutral"
             icon={<Zap className="w-5 h-5" />}
             description="User level based on stake & directs"
+          />
+          <StatCard
+            title="Directs"
+            value={`${directs}`}
+            change="Your direct referrals"
+            changeType="neutral"
+            icon={<Clock className="w-5 h-5" />}
+            description="Number of directs"
+          />
+          <StatCard
+            title="All Income"
+            value={`${totalIncomeHuman} ETN`}
+            change="Rewards + referral income"
+            changeType="positive"
+            icon={<Coins className="w-5 h-5" />}
+            description="Lifetime earned"
           />
           <StatCard
             title="Referrer"

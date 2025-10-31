@@ -2,12 +2,12 @@
     {
         "inputs": [
             {
-                "internalType": "contract IERC20",
+                "internalType": "address",
                 "name": "_stakingToken",
                 "type": "address"
             },
             {
-                "internalType": "contract IERC20",
+                "internalType": "address",
                 "name": "_usdtToken",
                 "type": "address"
             },
@@ -130,6 +130,50 @@
         "anonymous": false,
         "inputs": [
             {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "Compounded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "oldLevel",
+                "type": "uint8"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "newLevel",
+                "type": "uint8"
+            }
+        ],
+        "name": "LevelUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
                 "indexed": false,
                 "internalType": "uint256",
                 "name": "price18",
@@ -177,6 +221,31 @@
             {
                 "indexed": true,
                 "internalType": "address",
+                "name": "user",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "oldRank",
+                "type": "uint8"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "newRank",
+                "type": "uint8"
+            }
+        ],
+        "name": "RankUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
                 "name": "from",
                 "type": "address"
             },
@@ -191,6 +260,12 @@
                 "internalType": "uint256",
                 "name": "amount",
                 "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "toLevelIndex",
+                "type": "uint8"
             }
         ],
         "name": "ReferralPaid",
@@ -274,6 +349,19 @@
     {
         "inputs": [],
         "name": "CLAIM_INTERVAL",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "COMPOUND_THRESHOLD",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -397,6 +485,19 @@
         "type": "function"
     },
     {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "compoundMissedRewards",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
         "inputs": [],
         "name": "dailyRate",
         "outputs": [
@@ -404,6 +505,30 @@
                 "internalType": "uint256",
                 "name": "",
                 "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "name": "directsList",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
             }
         ],
         "stateMutability": "view",
@@ -467,8 +592,182 @@
         "type": "function"
     },
     {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getDirects",
+        "outputs": [
+            {
+                "internalType": "address[]",
+                "name": "",
+                "type": "address[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getDisplayLevel",
+        "outputs": [
+            {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getInternalLevel",
+        "outputs": [
+            {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
         "inputs": [],
         "name": "getTokenPriceUsd18",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            },
+            {
+                "internalType": "uint8",
+                "name": "levelIndex",
+                "type": "uint8"
+            }
+        ],
+        "name": "getUserLevelIncome",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getUserReport",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "selfStaked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "selfStakedUsdLocked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "pendingReward",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "lastAccruedAt",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "lastClaimAt",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint8",
+                "name": "displayLevel",
+                "type": "uint8"
+            },
+            {
+                "internalType": "uint8",
+                "name": "rank",
+                "type": "uint8"
+            },
+            {
+                "internalType": "uint256",
+                "name": "directs",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalReferralIncome",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalEarned",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalClaimed",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "name": "levelIncome",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -792,70 +1091,6 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "userInfo",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "selfStaked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "selfStakedUsdLocked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "rewardDebt",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "lastAccruedAt",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "lastClaimAt",
-                "type": "uint256"
-            },
-            {
-                "internalType": "address",
-                "name": "referrer",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "directs",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint8",
-                "name": "level",
-                "type": "uint8"
-            },
-            {
-                "internalType": "uint8",
-                "name": "rank",
-                "type": "uint8"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalReferralIncome",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
                 "name": "",
                 "type": "address"
             }
@@ -910,6 +1145,16 @@
             {
                 "internalType": "uint256",
                 "name": "totalReferralIncome",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalEarned",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalClaimed",
                 "type": "uint256"
             }
         ],
