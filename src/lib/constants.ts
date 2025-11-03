@@ -18,8 +18,7 @@ export const NAVIGATION_ITEMS = [
   { name: 'DASHBOARD', path: '/dashboard', icon: '📊' },
   { name: 'BOND', path: '/bond', icon: '🔗' },
   { name: 'STAKE', path: '/stake', icon: '🥩' },
-  { name: 'REWARD', path: '/reward', icon: '🎁' },
-  { name: 'Swap', path: '/swap', icon: '🏛️' },
+  // removed Reward and Swap per product requirements
   // { name: 'INVITE', path: '/invite', icon: '👥' },
   // { name: 'TURBINE', path: '/turbine', icon: '⚡' },
 ] as const;
@@ -42,7 +41,7 @@ export const TOKEN_INFO = {
 } as const;
 
 export const CONTRACT_ADDRESSES = {
-  stakingPlatform: '0x31348E9660E25F8aA471690d5F969Ec63E1158aE',
+  stakingPlatform: '0x08b6f4B3FFbE951e5FC1FA5DEB315498E19314c8',
   token: '0x3e88cff91778BAC662C3d912bF575493828Ac9Cf',
 } as const;
 

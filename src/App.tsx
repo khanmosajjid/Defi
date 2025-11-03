@@ -1,20 +1,17 @@
-
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { WalletProvider } from '@/providers/WalletProvider';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { WalletProvider } from "@/providers/WalletProvider";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 
 // Pages
-import Index from './pages/Index';
-import Dashboard from './pages/Dashboard';
-import Stake from './pages/Stake';
-import Bond from './pages/Bond';
-import Reward from './pages/Reward';
-import DAO from './pages/DAO';
-import NotFound from './pages/NotFound';
-import { Toaster } from 'react-hot-toast';
-
+import Index from "./pages/Index";
+import Dashboard from "./pages/Dashboard";
+import Stake from "./pages/Stake";
+import Bond from "./pages/Bond";
+import DAO from "./pages/DAO";
+import NotFound from "./pages/NotFound";
+import { Toaster } from "react-hot-toast";
 
 const App = () => (
   <WalletProvider>
@@ -29,17 +26,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/stake" element={<Stake />} />
               <Route path="/bond" element={<Bond />} />
-              <Route path="/reward" element={<Reward />} />
-              <Route
-                path="/swap"
-                element={
-                  <div className="min-h-screen bg-black text-white flex items-center justify-center">
-                    <h1 className="text-4xl text-yellow-400">
-                      Swap - Coming Soon
-                    </h1>
-                  </div>
-                }
-              />
+              {/* Reward and Swap routes removed */}
               <Route
                 path="/invite"
                 element={

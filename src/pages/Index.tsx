@@ -415,15 +415,7 @@ export default function Index() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <Link to="/swap">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10 px-8 py-4"
-                >
-                  Swap
-                </Button>
-              </Link>
+              {/* Swap CTA removed */}
             </div>
           </div>
         </div>

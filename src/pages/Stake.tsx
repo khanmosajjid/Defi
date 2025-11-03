@@ -31,6 +31,9 @@ export default function Stake() {
     userRewardPercent,
     unstake: unstakeTx,
     claimRewards,
+    fetchROIHistoryFull,
+    fetchLastNROIEvents,
+    fetchUserLevelIncome,
   } = useStakingContract();
 
   console.log("User Info:", userInfo);
@@ -66,12 +69,29 @@ export default function Stake() {
   }, [stakeAmount, getQuote, tokens.USDT, tokens.ETHAN]);
 
   const userStaked = userInfo?.selfStaked ?? "0";
+  const userStakedHuman = (() => {
+    try {
+      const bn = BigInt(userStaked || "0");
+      return (Number(bn / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  })();
   const pendingRewards =
     pendingRewardsRaw && pendingRewardsRaw !== "0"
       ? pendingRewardsRaw
-      : pendingComputed || (userInfo && userInfo.rewardDebt) || "0";
+      : pendingComputed || "0";
   const directs = userInfo?.directs ?? 0;
-  const totalIncome = userReport?.totalEarned ?? "0";
+  const totalIncome = (() => {
+    try {
+      const roi = BigInt(userReport?.totalRoiEarned ?? "0");
+      const lvl = BigInt(userReport?.totalLevelRewardEarned ?? "0");
+      const ref = BigInt(userReport?.totalReferralIncome ?? "0");
+      return (roi + lvl + ref).toString();
+    } catch {
+      return "0";
+    }
+  })();
   const totalIncomeHuman = (() => {
     try {
       const bn = BigInt(totalIncome);
@@ -241,9 +261,9 @@ export default function Stake() {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
             Staking
           </h1>
-          <p className="text-gray-400">
+          {/* <p className="text-gray-400">
             Stake ETN tokens and earn compound interest rewards every 8 hours
-          </p>
+          </p> */}
         </div>
 
         {/* Stats */}
@@ -303,6 +323,36 @@ export default function Stake() {
             changeType="positive"
             icon={<Coins className="w-5 h-5" />}
             description="Lifetime earned"
+          />
+          <StatCard
+            title="ROI Income"
+            value={`${(() => {
+              try {
+                const bn = BigInt(userReport?.totalRoiEarned ?? "0");
+                return (Number(bn / 10n ** 15n) / 1000).toLocaleString();
+              } catch {
+                return "0";
+              }
+            })()} ETN`}
+            change="Generated from staking"
+            changeType="positive"
+            icon={<TrendingUp className="w-5 h-5" />}
+            description="Lifetime ROI"
+          />
+          <StatCard
+            title="Level Income"
+            value={`${(() => {
+              try {
+                const bn = BigInt(userReport?.totalLevelRewardEarned ?? "0");
+                return (Number(bn / 10n ** 15n) / 1000).toLocaleString();
+              } catch {
+                return "0";
+              }
+            })()} ETN`}
+            change="Team level rewards"
+            changeType="positive"
+            icon={<Zap className="w-5 h-5" />}
+            description="Lifetime level income"
           />
           <StatCard
             title="Referrer"
@@ -449,6 +499,12 @@ export default function Stake() {
                         onChange={(e) => setUnstakeAmount(e.target.value)}
                         className="bg-gray-800 border-gray-700 text-white"
                       />
+                      <div className="text-sm text-gray-400">
+                        Available to unstake:{" "}
+                        <span className="text-yellow-400">
+                          {userStakedHuman} ETN
+                        </span>
+                      </div>
                       <Button
                         variant="outline"
                         className="w-full border-red-500/20 text-red-400 hover:bg-red-500/10"
@@ -511,9 +567,183 @@ export default function Stake() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* ROI Generated */}
+            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+              <CardHeader>
+                <CardTitle className="text-yellow-400">ROI Generated</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ROIList
+                  fetchFull={fetchROIHistoryFull}
+                  fetchLastN={fetchLastNROIEvents}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Income by Level */}
+            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+              <CardHeader>
+                <CardTitle className="text-yellow-400">
+                  Income by Level
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LevelIncomeList fetchUserLevelIncome={fetchUserLevelIncome} />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ROIList({
+  fetchFull,
+  fetchLastN,
+}: {
+  fetchFull: () => Promise<Array<{ amount: string; timestamp: number }>>;
+  fetchLastN: (
+    max: number
+  ) => Promise<Array<{ amount: string; timestamp: number }>>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<
+    Array<{ amount: string; timestamp: number }>
+  >([]);
+  const formatAmount = (v?: string) => {
+    try {
+      if (!v) return "0";
+      return (Number(BigInt(v) / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  };
+  const formatTime = (ts?: number) => {
+    try {
+      if (!ts) return "-";
+      return new Date(ts * 1000).toLocaleString();
+    } catch {
+      return "-";
+    }
+  };
+  const load = async (useLastN = true) => {
+    try {
+      setLoading(true);
+      const data = useLastN ? await fetchLastN(50) : await fetchFull();
+      setItems(Array.isArray(data) ? data : []);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            onClick={() => load(true)}
+            disabled={loading}
+          >
+            {loading
+              ? "Loading…"
+              : items.length
+              ? "Refresh (Last 50)"
+              : "Load (Last 50)"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            onClick={() => load(false)}
+            disabled={loading}
+          >
+            Full
+          </Button>
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-gray-500">No ROI entries yet</p>
+      ) : (
+        <ul className="space-y-1 max-h-64 overflow-auto pr-1">
+          {items.map((e, i) => (
+            <li
+              key={`s-roi-${i}`}
+              className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+            >
+              <span className="text-gray-200">{formatTime(e.timestamp)}</span>
+              <span className="text-green-400">
+                +{formatAmount(e.amount)} ETN
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function LevelIncomeList({
+  fetchUserLevelIncome,
+}: {
+  fetchUserLevelIncome: () => Promise<string[]>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [levelIncome, setLevelIncome] = useState<string[]>([]);
+  const load = async () => {
+    try {
+      setLoading(true);
+      const arr = await fetchUserLevelIncome();
+      setLevelIncome(arr);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    // auto-load once
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+          onClick={load}
+          disabled={loading}
+        >
+          {loading ? "Loading…" : levelIncome.length ? "Refresh" : "Load"}
+        </Button>
+      </div>
+      {levelIncome && levelIncome.some((v) => v !== "0") ? (
+        <ul className="space-y-1">
+          {levelIncome.map((v, i) => {
+            if (!v || v === "0") return null;
+            let human = "0";
+            try {
+              human = (Number(BigInt(v) / 10n ** 15n) / 1000).toLocaleString();
+            } catch {
+              // ignore parse
+            }
+            return (
+              <li
+                key={`lvl-${i}`}
+                className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+              >
+                <span className="text-gray-200">L{i + 1}</span>
+                <span className="text-yellow-400">{human} ETN</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-xs text-gray-500">No level income yet</p>
+      )}
     </div>
   );
 }

@@ -81,7 +81,13 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "principal",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "totalWithBonus",
                 "type": "uint256"
             }
         ],
@@ -117,22 +123,9 @@
         "anonymous": false,
         "inputs": [
             {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "distributed",
-                "type": "uint256"
-            }
-        ],
-        "name": "CompanyValuationDistributed",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
                 "indexed": true,
                 "internalType": "address",
-                "name": "user",
+                "name": "from",
                 "type": "address"
             },
             {
@@ -142,7 +135,20 @@
                 "type": "uint256"
             }
         ],
-        "name": "Compounded",
+        "name": "CompanyPoolFunded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "CompanyPoolUsed",
         "type": "event"
     },
     {
@@ -268,7 +274,7 @@
                 "type": "uint8"
             }
         ],
-        "name": "ReferralPaid",
+        "name": "ReferralCreditedFromPool",
         "type": "event"
     },
     {
@@ -287,7 +293,7 @@
                 "type": "uint256"
             }
         ],
-        "name": "RewardClaimed",
+        "name": "RoiCompounded",
         "type": "event"
     },
     {
@@ -314,7 +320,7 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "usdLocked",
+                "name": "usdLocked18",
                 "type": "uint256"
             }
         ],
@@ -339,38 +345,12 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "usdReduced",
+                "name": "usdReduced18",
                 "type": "uint256"
             }
         ],
         "name": "Unstaked",
         "type": "event"
-    },
-    {
-        "inputs": [],
-        "name": "CLAIM_INTERVAL",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "COMPOUND_THRESHOLD",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
     },
     {
         "inputs": [],
@@ -388,6 +368,19 @@
     {
         "inputs": [],
         "name": "RATE_DECIMALS",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "SECONDS_PER_DAY",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -455,18 +448,11 @@
             },
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "principal",
                 "type": "uint256"
             }
         ],
         "name": "buyBond",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "claimRewards",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -492,9 +478,34 @@
                 "type": "address"
             }
         ],
-        "name": "compoundMissedRewards",
-        "outputs": [],
-        "stateMutability": "nonpayable",
+        "name": "currentStakeWithAccrued",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "currentUsdAmountStaked",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -532,19 +543,6 @@
             }
         ],
         "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address[]",
-                "name": "candidateAddresses",
-                "type": "address[]"
-            }
-        ],
-        "name": "distributeCompanyValuationRewards",
-        "outputs": [],
-        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -618,12 +616,24 @@
                 "type": "address"
             }
         ],
-        "name": "getDisplayLevel",
+        "name": "getFullROIHistory",
         "outputs": [
             {
-                "internalType": "uint8",
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "amount",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    }
+                ],
+                "internalType": "struct StakingPlatform.RoiHistory[]",
                 "name": "",
-                "type": "uint8"
+                "type": "tuple[]"
             }
         ],
         "stateMutability": "view",
@@ -637,12 +647,96 @@
                 "type": "address"
             }
         ],
-        "name": "getInternalLevel",
+        "name": "getLast10DaysROI",
         "outputs": [
             {
-                "internalType": "uint8",
+                "internalType": "uint256",
                 "name": "",
-                "type": "uint8"
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "daysCount",
+                "type": "uint256"
+            }
+        ],
+        "name": "getLastNDaysROI",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "total",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "maxEvents",
+                "type": "uint256"
+            }
+        ],
+        "name": "getLastNEventsROI",
+        "outputs": [
+            {
+                "internalType": "uint256[]",
+                "name": "amounts",
+                "type": "uint256[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "timestamps",
+                "type": "uint256[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getStakeHistory",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "amount",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    }
+                ],
+                "internalType": "struct StakingPlatform.HistoryEntry[]",
+                "name": "",
+                "type": "tuple[]"
             }
         ],
         "stateMutability": "view",
@@ -656,6 +750,37 @@
                 "internalType": "uint256",
                 "name": "",
                 "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getUnstakeHistory",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "amount",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    }
+                ],
+                "internalType": "struct StakingPlatform.HistoryEntry[]",
+                "name": "",
+                "type": "tuple[]"
             }
         ],
         "stateMutability": "view",
@@ -697,7 +822,22 @@
         "outputs": [
             {
                 "internalType": "uint256",
-                "name": "selfStaked",
+                "name": "originalStaked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "originalUsdLocked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "compoundedStake",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "compoundedStakeWithAccrued",
                 "type": "uint256"
             },
             {
@@ -707,17 +847,12 @@
             },
             {
                 "internalType": "uint256",
-                "name": "pendingReward",
+                "name": "currentUsdStakedLive",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "lastAccruedAt",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "lastClaimAt",
+                "name": "pendingRoi",
                 "type": "uint256"
             },
             {
@@ -737,17 +872,22 @@
             },
             {
                 "internalType": "uint256",
+                "name": "totalRoiEarned",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalLevelRewardEarned",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
                 "name": "totalReferralIncome",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "totalEarned",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalClaimed",
+                "name": "totalWithdrawn",
                 "type": "uint256"
             }
         ],
@@ -904,6 +1044,35 @@
     {
         "inputs": [
             {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "name": "roiHistory",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "uint256",
                 "name": "newDailyRate18",
                 "type": "uint256"
@@ -963,7 +1132,7 @@
         "name": "stakingToken",
         "outputs": [
             {
-                "internalType": "contract IERC20",
+                "internalType": "contract IERC20Metadata",
                 "name": "",
                 "type": "address"
             }
@@ -1040,7 +1209,7 @@
         "name": "usdtToken",
         "outputs": [
             {
-                "internalType": "contract IERC20",
+                "internalType": "contract IERC20Metadata",
                 "name": "",
                 "type": "address"
             }
@@ -1099,6 +1268,16 @@
         "outputs": [
             {
                 "internalType": "uint256",
+                "name": "originalStaked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "originalUsdLocked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
                 "name": "selfStaked",
                 "type": "uint256"
             },
@@ -1109,17 +1288,7 @@
             },
             {
                 "internalType": "uint256",
-                "name": "rewardDebt",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
                 "name": "lastAccruedAt",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "lastClaimAt",
                 "type": "uint256"
             },
             {
@@ -1144,17 +1313,22 @@
             },
             {
                 "internalType": "uint256",
+                "name": "totalRoiEarned",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalLevelRewardEarned",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
                 "name": "totalReferralIncome",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "totalEarned",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalClaimed",
+                "name": "totalWithdrawn",
                 "type": "uint256"
             }
         ],

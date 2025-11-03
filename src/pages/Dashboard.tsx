@@ -17,6 +17,207 @@ import {
 } from "lucide-react";
 import { STATS } from "@/lib/constants";
 
+function HistoryPanel() {
+  const { fetchStakeHistory, fetchUnstakeHistory } = useStakingContract();
+  const [loading, setLoading] = useState(false);
+  const [stakeHist, setStakeHist] = useState<
+    Array<{ amount: string; timestamp: number }>
+  >([]);
+  const [unstakeHist, setUnstakeHist] = useState<
+    Array<{ amount: string; timestamp: number }>
+  >([]);
+
+  const formatAmount = (v?: string) => {
+    try {
+      if (!v) return "0";
+      return (Number(BigInt(v) / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  };
+  const formatTime = (ts?: number) => {
+    try {
+      if (!ts) return "-";
+      const d = new Date(ts * 1000);
+      return d.toLocaleString();
+    } catch {
+      return "-";
+    }
+  };
+
+  async function load() {
+    try {
+      setLoading(true);
+      const [sh, uh] = await Promise.all([
+        fetchStakeHistory(),
+        fetchUnstakeHistory(),
+      ]);
+      setStakeHist(Array.isArray(sh) ? sh : []);
+      setUnstakeHist(Array.isArray(uh) ? uh : []);
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="p-4 bg-gray-800 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-gray-400">Stake/Unstake history</p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+          onClick={load}
+          disabled={loading}
+        >
+          {loading
+            ? "Loading…"
+            : stakeHist.length || unstakeHist.length
+            ? "Refresh"
+            : "Load"}
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs text-gray-400 mb-1">Stakes</p>
+          {stakeHist.length === 0 ? (
+            <p className="text-xs text-gray-500">No stakes yet</p>
+          ) : (
+            <ul className="space-y-1">
+              {stakeHist.map((e, i) => (
+                <li
+                  key={`s-${i}`}
+                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                >
+                  <span className="text-gray-200">
+                    {formatTime(e.timestamp)}
+                  </span>
+                  <span className="text-yellow-400">
+                    {formatAmount(e.amount)} ETN
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 mb-1">Unstakes</p>
+          {unstakeHist.length === 0 ? (
+            <p className="text-xs text-gray-500">No unstakes yet</p>
+          ) : (
+            <ul className="space-y-1">
+              {unstakeHist.map((e, i) => (
+                <li
+                  key={`u-${i}`}
+                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                >
+                  <span className="text-gray-200">
+                    {formatTime(e.timestamp)}
+                  </span>
+                  <span className="text-yellow-400">
+                    {formatAmount(e.amount)} ETN
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ROIHistoryPanel() {
+  const { fetchROIHistoryFull, fetchLastNROIEvents } = useStakingContract();
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<
+    Array<{ amount: string; timestamp: number }>
+  >([]);
+
+  const formatAmount = (v?: string) => {
+    try {
+      if (!v) return "0";
+      return (Number(BigInt(v) / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  };
+  const formatTime = (ts?: number) => {
+    try {
+      if (!ts) return "-";
+      return new Date(ts * 1000).toLocaleString();
+    } catch {
+      return "-";
+    }
+  };
+
+  async function load(useLastN = true) {
+    try {
+      setLoading(true);
+      // Prefer smaller last-N fetch to keep list tidy; fallback to full history
+      const data = useLastN
+        ? await fetchLastNROIEvents(50)
+        : await fetchROIHistoryFull();
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="p-4 bg-gray-800 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-gray-400">ROI generated history</p>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            onClick={() => load(true)}
+            disabled={loading}
+          >
+            {loading
+              ? "Loading…"
+              : items.length
+              ? "Refresh (Last 50)"
+              : "Load (Last 50)"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            onClick={() => load(false)}
+            disabled={loading}
+          >
+            Full
+          </Button>
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-gray-500">No ROI entries yet</p>
+      ) : (
+        <ul className="space-y-1 max-h-72 overflow-auto pr-1">
+          {items.map((e, i) => (
+            <li
+              key={`roi-${i}`}
+              className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+            >
+              <span className="text-gray-200">{formatTime(e.timestamp)}</span>
+              <span className="text-green-400">
+                +{formatAmount(e.amount)} ETN
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const {
@@ -561,19 +762,23 @@ export default function Dashboard() {
                       <p className="text-sm text-gray-400">User report</p>
                       <div className="grid grid-cols-2 gap-3 mt-2 text-sm text-gray-300">
                         <div>
-                          <p className="text-gray-400">Total earned</p>
+                          <p className="text-gray-400">Total ROI earned</p>
                           <p className="text-yellow-400 font-medium">
-                            {formatWeiToETN(userReport?.totalEarned)} ETN
+                            {formatWeiToETN(userReport?.totalRoiEarned)} ETN
                           </p>
                         </div>
                         <div>
-                          <p className="text-gray-400">Total claimed</p>
+                          <p className="text-gray-400">Total withdrawn</p>
                           <p className="text-yellow-400 font-medium">
-                            {formatWeiToETN(userReport?.totalClaimed)} ETN
+                            {formatWeiToETN(userReport?.totalWithdrawn)} ETN
                           </p>
                         </div>
                       </div>
                     </div>
+                    {/* Stake/Unstake History */}
+                    <HistoryPanel />
+                    {/* ROI Generated History */}
+                    <ROIHistoryPanel />
                   </TabsContent>
 
                   <TabsContent value="bonds" className="space-y-4">

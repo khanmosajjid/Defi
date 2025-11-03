@@ -387,52 +387,44 @@ export function useStakingContract() {
     // Map userInfoRaw to friendly fields
     const userInfo = userInfoRaw
         ? (() => {
-            // normalize level: contract uses uint8 max (255) to mean NO_LEVEL
+            // per updated contract users mapping order:
+            // [0] originalStaked
+            // [1] originalUsdLocked
+            // [2] selfStaked
+            // [3] selfStakedUsdLocked
+            // [4] lastAccruedAt
+            // [5] referrer
+            // [6] directs
+            // [7] level (NO_LEVEL=255 or 1..15)
+            // [8] rank
+            // [9] totalRoiEarned
+            // [10] totalLevelRewardEarned
+            // [11] totalReferralIncome
+            // [12] totalWithdrawn
             const rawLevelStr = extractString(userInfoRaw[7]) ?? '0';
             let level = 0;
             try {
                 const rawLevelBn = BigInt(rawLevelStr);
-                if (rawLevelBn === 255n) {
-                    level = 0;
-                } else if (rawLevelBn <= 1000000n) {
-                    // safe clamp to avoid accidentally converting huge scientific notation to Number
-                    level = Number(rawLevelBn);
-                } else {
-                    level = 0;
-                }
+                if (rawLevelBn === 255n) level = 0;
+                else if (rawLevelBn <= 1000000n) level = Number(rawLevelBn);
             } catch {
                 level = 0;
             }
-
-
             return {
-                // per contract users mapping order:
-                // [0] selfStaked
-                // [1] selfStakedUsdLocked
-                // [2] rewardDebt
-                // [3] lastAccruedAt
-                // [4] lastClaimAt
-                // [5] referrer
-                // [6] directs
-                // [7] level (0..14 or 255 NO_LEVEL)
-                // [8] rank (0..5)
-                // [9] totalReferralIncome
-                // [10] totalEarned
-                // [11] totalClaimed
-                selfStaked: extractString(userInfoRaw[0]) ?? '0',
-                selfStakedUsdLocked: extractString(userInfoRaw[1]) ?? '0',
-                rewardDebt: extractString(userInfoRaw[2]) ?? '0',
-                lastAccruedAt: extractString(userInfoRaw[3]) ?? '0',
-                lastClaimAt: extractString(userInfoRaw[4]) ?? '0',
-                referrer: userInfoRaw[5] ?? ZERO_ADDRESS,
-                referrerShort: shortenAddress(userInfoRaw[5]),
+                originalStaked: extractString(userInfoRaw[0]) ?? '0',
+                originalUsdLocked: extractString(userInfoRaw[1]) ?? '0',
+                selfStaked: extractString(userInfoRaw[2]) ?? '0',
+                selfStakedUsdLocked: extractString(userInfoRaw[3]) ?? '0',
+                lastAccruedAt: extractString(userInfoRaw[4]) ?? '0',
+                referrer: (userInfoRaw[5] as string) ?? ZERO_ADDRESS,
+                referrerShort: shortenAddress(userInfoRaw[5] as string),
                 directs: Number(extractString(userInfoRaw[6]) ?? 0),
-                // normalized level (0 means no level)
                 level,
                 rank: Number(extractString(userInfoRaw[8]) ?? 0),
-                totalReferralIncome: extractString(userInfoRaw[9]) ?? '0',
-                totalEarned: extractString(userInfoRaw[10]) ?? '0',
-                totalClaimed: extractString(userInfoRaw[11]) ?? '0',
+                totalRoiEarned: extractString(userInfoRaw[9]) ?? '0',
+                totalLevelRewardEarned: extractString(userInfoRaw[10]) ?? '0',
+                totalReferralIncome: extractString(userInfoRaw[11]) ?? '0',
+                totalWithdrawn: extractString(userInfoRaw[12]) ?? '0',
             };
         })()
         : null;
@@ -485,31 +477,25 @@ export function useStakingContract() {
     const pendingRewards = pendingRewardsRaw ? pendingRewardsRaw.toString() : '0';
     const pendingRewardsHuman = pendingRewardsRaw ? formatUnits(pendingRewardsRaw.toString(), 18) : '0';
 
-    // fallback: compute pending locally when pendingRewards read returns 0 but user has stake and lastAccruedAt
+    // fallback local compute of pending ROI using selfStaked and lastAccruedAt
     let pendingComputed = '0';
     let pendingComputedHuman = '0';
     try {
         const selfStakedStr = userInfo?.selfStaked ?? '0';
-        const rewardDebtStr = userInfo?.rewardDebt ?? '0';
         const lastAcc = userInfo?.lastAccruedAt ?? '0';
         const selfStakedBn = BigInt(selfStakedStr);
-        const rewardDebtBn = BigInt(rewardDebtStr);
         const lastAccBn = BigInt(lastAcc);
-
         if (selfStakedBn > 0n && lastAccBn > 0n) {
             const nowSec = BigInt(Math.floor(Date.now() / 1000));
             const elapsed = nowSec > lastAccBn ? nowSec - lastAccBn : 0n;
-            const dailyRateBn = dailyRateRaw ? BigInt(dailyRateRaw.toString()) : 10000000000000000n; // default 1e16
+            const dailyRateBn = dailyRateRaw ? BigInt(dailyRateRaw.toString()) : 10000000000000000n;
             const RATE_DECIMALS_BN = 1000000000000000000n; // 1e18
-
-            // reward = (selfStaked * dailyRate * elapsed) / RATE_DECIMALS / 86400
             const reward = (selfStakedBn * dailyRateBn * elapsed) / RATE_DECIMALS_BN / 86400n;
-            const total = rewardDebtBn + reward;
-            pendingComputed = total.toString();
+            pendingComputed = reward.toString();
             pendingComputedHuman = formatUnits(pendingComputed, 18);
         }
     } catch (e) {
-        // ignore computation errors
+        // ignore local compute errors
     }
 
     // Helper to fetch user's bonds list with plan metadata
@@ -595,6 +581,98 @@ export function useStakingContract() {
         }
     }
 
+    // Fetch available bond plans (plans 1..10, filtering exists)
+    async function fetchBondPlans() {
+        const plans: Array<{ id: number; duration: number; rewardPercent: number; exists: boolean }> = [];
+        // probe a reasonable range (1..10)
+        for (let id = 1; id <= 10; id++) {
+            try {
+                const p = await readContract(config, ({
+                    address: CONTRACT_ADDRESS as `0x${string}`,
+                    abi: CONTRACT_ABI as Abi,
+                    functionName: 'bondPlans',
+                    args: [BigInt(id)],
+                } as any)) as readonly [bigint, bigint, boolean]; // eslint-disable-line @typescript-eslint/no-explicit-any
+                const exists = Boolean(p?.[2]);
+                if (exists) {
+                    plans.push({ id, duration: Number(p[0] ?? 0n), rewardPercent: Number(p[1] ?? 0n), exists });
+                }
+            } catch (e) {
+                // stop if function missing or out-of-range
+            }
+        }
+        return plans;
+    }
+
+    // Buy a bond: ensure allowance then call buyBond(planId, principal)
+    async function buyBond(planId: number, amount: string) {
+        const txToast = toast.loading('Submitting bond purchase...');
+        try {
+            // ensure allowance for staking token
+            let allowanceStr = tokenAllowanceRaw ? tokenAllowanceRaw.toString() : '0';
+            try {
+                const fresh = await refetchTokenAllowance();
+                const s = extractString(fresh);
+                if (s) allowanceStr = s;
+            } catch (e) {
+                // ignore read errors for out-of-range ids
+            }
+            const allowance = BigInt(allowanceStr);
+            const amountWei = parseEther(amount);
+            if (allowance < amountWei) {
+                const approveToast = toast.loading('Approving token spend...');
+                try {
+                    await writeAndWaitForReceipt({
+                        abi: ERC20_ABI as Abi,
+                        address: TOKEN_ADDRESS,
+                        functionName: 'approve',
+                        args: [CONTRACT_ADDRESS, APPROVE_AMOUNT],
+                    });
+                    toast.success('Approval confirmed', { id: approveToast });
+                } catch (err) {
+                    toast.error('Approval failed', { id: approveToast });
+                    throw err;
+                }
+            }
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'buyBond',
+                args: [BigInt(planId), amountWei],
+            });
+            toast.success('Bond purchase confirmed', { id: txToast });
+            try { await refetchUserInfo(); await refetchTokenBalance(); } catch (e) {
+                // ignore refetch errors
+            }
+            return receipt;
+        } catch (err) {
+            console.error('buyBond error', err);
+            toast.error('Bond purchase failed', { id: txToast });
+            throw err;
+        }
+    }
+
+    async function withdrawBond(index: number) {
+        const txToast = toast.loading('Withdrawing bond...');
+        try {
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'withdrawBond',
+                args: [BigInt(index)],
+            });
+            toast.success('Bond withdrawn', { id: txToast });
+            try { await refetchUserInfo(); await refetchTokenBalance(); } catch (e) {
+                // ignore refetch errors
+            }
+            return receipt;
+        } catch (err) {
+            console.error('withdrawBond error', err);
+            toast.error('Withdraw failed', { id: txToast });
+            throw err;
+        }
+    }
+
     // -----------------------------
     // Activity & Transactions (events)
     // -----------------------------
@@ -621,12 +699,11 @@ export function useStakingContract() {
     };
 
     const EVT = {
-        Staked: parseAbiItem('event Staked(address indexed user, uint256 amount, address indexed referrer, uint256 usdLocked)'),
-        Unstaked: parseAbiItem('event Unstaked(address indexed user, uint256 amount, uint256 usdReduced)'),
-        RewardClaimed: parseAbiItem('event RewardClaimed(address indexed user, uint256 amount)'),
-        ReferralPaid: parseAbiItem('event ReferralPaid(address indexed from, address indexed to, uint256 amount, uint8 toLevelIndex)'),
-        Compounded: parseAbiItem('event Compounded(address indexed user, uint256 amount)'),
-        BondPurchased: parseAbiItem('event BondPurchased(address indexed user, uint8 planId, uint256 amount)'),
+        Staked: parseAbiItem('event Staked(address indexed user, uint256 amount, address indexed referrer, uint256 usdLocked18)'),
+        Unstaked: parseAbiItem('event Unstaked(address indexed user, uint256 amount, uint256 usdReduced18)'),
+        RoiCompounded: parseAbiItem('event RoiCompounded(address indexed user, uint256 amount)'),
+        ReferralCreditedFromPool: parseAbiItem('event ReferralCreditedFromPool(address indexed from, address indexed to, uint256 amount, uint8 toLevelIndex)'),
+        BondPurchased: parseAbiItem('event BondPurchased(address indexed user, uint8 planId, uint256 principal, uint256 totalWithBonus)'),
         BondWithdrawn: parseAbiItem('event BondWithdrawn(address indexed user, uint8 planId, uint256 amount)'),
         LevelUpdated: parseAbiItem('event LevelUpdated(address indexed user, uint8 oldLevel, uint8 newLevel)'),
         RankUpdated: parseAbiItem('event RankUpdated(address indexed user, uint8 oldRank, uint8 newRank)'),
@@ -670,13 +747,12 @@ export function useStakingContract() {
         const stakingAddr = CONTRACT_ADDRESS as `0x${string}`;
         const tokenAddr = CONTRACT_ADDRESSES.token as `0x${string}`;
 
-        const [staked, unstaked, claimed, compounded, refPaidTo, refPaidFrom, bondBuy, bondWd, lvlUpd, rnkUpd] = await Promise.all([
+        const [staked, unstaked, compounded, refIn, refOut, bondBuy, bondWd, lvlUpd, rnkUpd] = await Promise.all([
             pc.getLogs({ address: stakingAddr, event: EVT.Staked, args: { user: acct }, fromBlock, toBlock }),
             pc.getLogs({ address: stakingAddr, event: EVT.Unstaked, args: { user: acct }, fromBlock, toBlock }),
-            pc.getLogs({ address: stakingAddr, event: EVT.RewardClaimed, args: { user: acct }, fromBlock, toBlock }),
-            pc.getLogs({ address: stakingAddr, event: EVT.Compounded, args: { user: acct }, fromBlock, toBlock }),
-            pc.getLogs({ address: stakingAddr, event: EVT.ReferralPaid, args: { to: acct }, fromBlock, toBlock }),
-            pc.getLogs({ address: stakingAddr, event: EVT.ReferralPaid, args: { from: acct }, fromBlock, toBlock }),
+            pc.getLogs({ address: stakingAddr, event: EVT.RoiCompounded, args: { user: acct }, fromBlock, toBlock }),
+            pc.getLogs({ address: stakingAddr, event: EVT.ReferralCreditedFromPool, args: { to: acct }, fromBlock, toBlock }),
+            pc.getLogs({ address: stakingAddr, event: EVT.ReferralCreditedFromPool, args: { from: acct }, fromBlock, toBlock }),
             pc.getLogs({ address: stakingAddr, event: EVT.BondPurchased, args: { user: acct }, fromBlock, toBlock }),
             pc.getLogs({ address: stakingAddr, event: EVT.BondWithdrawn, args: { user: acct }, fromBlock, toBlock }),
             pc.getLogs({ address: stakingAddr, event: EVT.LevelUpdated, args: { user: acct }, fromBlock, toBlock }),
@@ -704,55 +780,22 @@ export function useStakingContract() {
                 amount: toStr(a?.amount),
             });
         });
-        claimed.forEach((l) => {
-            const a = (l as { args?: Record<string, unknown> }).args;
-            items.push({
-                kind: 'CLAIM',
-                txHash: l.transactionHash,
-                blockNumber: Number(l.blockNumber ?? 0n),
-                amount: toStr(a?.amount),
-            });
-        });
         compounded.forEach((l) => {
             const a = (l as { args?: Record<string, unknown> }).args;
-            items.push({
-                kind: 'COMPOUND',
-                txHash: l.transactionHash,
-                blockNumber: Number(l.blockNumber ?? 0n),
-                amount: toStr(a?.amount),
-            });
+            items.push({ kind: 'COMPOUND', txHash: l.transactionHash, blockNumber: Number(l.blockNumber ?? 0n), amount: toStr(a?.amount) });
         });
-        refPaidTo.forEach((l) => {
+        refIn.forEach((l) => {
             const a = (l as { args?: Record<string, unknown> }).args;
-            items.push({
-                kind: 'REFERRAL_IN',
-                txHash: l.transactionHash,
-                blockNumber: Number(l.blockNumber ?? 0n),
-                amount: toStr(a?.amount),
-                counterparty: toAddr(a?.from),
-                meta: { levelIndex: toNum(a?.toLevelIndex) },
-            });
+            items.push({ kind: 'REFERRAL_IN', txHash: l.transactionHash, blockNumber: Number(l.blockNumber ?? 0n), amount: toStr(a?.amount), counterparty: toAddr(a?.from), meta: { levelIndex: toNum(a?.toLevelIndex) } });
         });
-        refPaidFrom.forEach((l) => {
+        refOut.forEach((l) => {
             const a = (l as { args?: Record<string, unknown> }).args;
-            items.push({
-                kind: 'REFERRAL_OUT',
-                txHash: l.transactionHash,
-                blockNumber: Number(l.blockNumber ?? 0n),
-                amount: toStr(a?.amount),
-                counterparty: toAddr(a?.to),
-                meta: { levelIndex: toNum(a?.toLevelIndex) },
-            });
+            items.push({ kind: 'REFERRAL_OUT', txHash: l.transactionHash, blockNumber: Number(l.blockNumber ?? 0n), amount: toStr(a?.amount), counterparty: toAddr(a?.to), meta: { levelIndex: toNum(a?.toLevelIndex) } });
         });
         bondBuy.forEach((l) => {
             const a = (l as { args?: Record<string, unknown> }).args;
-            items.push({
-                kind: 'BOND_BUY',
-                txHash: l.transactionHash,
-                blockNumber: Number(l.blockNumber ?? 0n),
-                amount: toStr(a?.amount),
-                meta: { planId: toNum(a?.planId) },
-            });
+            // show totalWithBonus as amount; include principal in meta
+            items.push({ kind: 'BOND_BUY', txHash: l.transactionHash, blockNumber: Number(l.blockNumber ?? 0n), amount: toStr(a?.totalWithBonus), meta: { planId: toNum(a?.planId), principal: toStr(a?.principal) } });
         });
         bondWd.forEach((l) => {
             const a = (l as { args?: Record<string, unknown> }).args;
@@ -835,6 +878,63 @@ export function useStakingContract() {
     }
 
     // -----------------------------
+    // User report & directs (needed for UI panels and team/income)
+    // -----------------------------
+    const { data: userReportRaw } = useReadContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'getUserReport',
+        args: [address],
+    });
+
+    const userReport = userReportRaw ? {
+        originalStaked: extractString(userReportRaw[0]) ?? '0',
+        originalUsdLocked: extractString(userReportRaw[1]) ?? '0',
+        compoundedStake: extractString(userReportRaw[2]) ?? '0',
+        compoundedStakeWithAccrued: extractString(userReportRaw[3]) ?? '0',
+        selfStakedUsdLocked: extractString(userReportRaw[4]) ?? '0',
+        currentUsdStakedLive: extractString(userReportRaw[5]) ?? '0',
+        pendingRoi: extractString(userReportRaw[6]) ?? '0',
+        displayLevel: Number(extractString(userReportRaw[7]) ?? '0'),
+        rank: Number(extractString(userReportRaw[8]) ?? '0'),
+        directs: Number(extractString(userReportRaw[9]) ?? '0'),
+        totalRoiEarned: extractString(userReportRaw[10]) ?? '0',
+        totalLevelRewardEarned: extractString(userReportRaw[11]) ?? '0',
+        totalReferralIncome: extractString(userReportRaw[12]) ?? '0',
+        totalWithdrawn: extractString(userReportRaw[13]) ?? '0',
+    } : null;
+
+    const { data: directsListRaw } = useReadContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'getDirects',
+        args: [address],
+    });
+
+    const directsList = Array.isArray(directsListRaw) ? (directsListRaw as string[]) : [];
+
+    // Fetch per-level income (levels 0..14)
+    async function fetchUserLevelIncome() {
+        if (!address) return Array(15).fill('0') as string[];
+        const result: string[] = [];
+        for (let i = 0; i < 15; i++) {
+            try {
+                const levelIncomeParams = {
+                    address: CONTRACT_ADDRESS as `0x${string}`,
+                    abi: CONTRACT_ABI as Abi,
+                    functionName: 'getUserLevelIncome',
+                    args: [address as `0x${string}`, BigInt(i)],
+                } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+                const v = await readContract(config, levelIncomeParams) as bigint;
+                result.push(v?.toString() ?? '0');
+            } catch (e) {
+                result.push('0');
+            }
+        }
+        return result;
+    }
+
+    // -----------------------------
     // Downlines by Level (multi-level team)
     // -----------------------------
     async function fetchDownlinesByLevel(maxDepth?: number): Promise<Record<number, string[]>> {
@@ -871,57 +971,75 @@ export function useStakingContract() {
         return levels;
     }
 
-    // Read user report (aggregated stats)
-    const { data: userReportRaw } = useReadContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'getUserReport',
-        args: [address],
-    });
-
-    const userReport = userReportRaw ? {
-        selfStaked: extractString(userReportRaw[0]) ?? '0',
-        selfStakedUsdLocked: extractString(userReportRaw[1]) ?? '0',
-        pendingReward: extractString(userReportRaw[2]) ?? '0',
-        lastAccruedAt: extractString(userReportRaw[3]) ?? '0',
-        lastClaimAt: extractString(userReportRaw[4]) ?? '0',
-        displayLevel: Number(extractString(userReportRaw[5]) ?? '0'),
-        rank: Number(extractString(userReportRaw[6]) ?? '0'),
-        directs: Number(extractString(userReportRaw[7]) ?? '0'),
-        totalReferralIncome: extractString(userReportRaw[8]) ?? '0',
-        totalEarned: extractString(userReportRaw[9]) ?? '0',
-        totalClaimed: extractString(userReportRaw[10]) ?? '0',
-    } : null;
-
-    // Directs list
-    const { data: directsListRaw } = useReadContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'getDirects',
-        args: [address],
-    });
-
-    const directsList = Array.isArray(directsListRaw) ? (directsListRaw as string[]) : [];
-
-    // Fetch per-level income (0..14). Return array of strings (token units)
-    async function fetchUserLevelIncome() {
-        if (!address) return Array(15).fill('0') as string[];
-        const result: string[] = [];
-        for (let i = 0; i < 15; i++) {
-            try {
-                const levelIncomeParams = {
-                    address: CONTRACT_ADDRESS as `0x${string}`,
-                    abi: CONTRACT_ABI as Abi,
-                    functionName: 'getUserLevelIncome',
-                    args: [address as `0x${string}`, BigInt(i)],
-                } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-                const v = await readContract(config, levelIncomeParams) as bigint;
-                result.push(v?.toString() ?? '0');
-            } catch (e) {
-                result.push('0');
-            }
+    // -----------------------------
+    // Stake/Unstake history views
+    // -----------------------------
+    async function fetchStakeHistory() {
+        if (!address) return [] as Array<{ amount: string; timestamp: number }>;
+        try {
+            const res = await readContract(config, ({
+                address: CONTRACT_ADDRESS as `0x${string}`,
+                abi: CONTRACT_ABI as Abi,
+                functionName: 'getStakeHistory',
+                args: [address as `0x${string}`],
+            } as any)) as ReadonlyArray<readonly [bigint, bigint]>; // eslint-disable-line @typescript-eslint/no-explicit-any
+            return (res as ReadonlyArray<readonly [bigint, bigint]>).map((e) => ({ amount: (e?.[0] ?? 0n).toString(), timestamp: Number(e?.[1] ?? 0n) }));
+        } catch (e) {
+            return [] as Array<{ amount: string; timestamp: number }>;
         }
-        return result;
+    }
+
+    async function fetchUnstakeHistory() {
+        if (!address) return [] as Array<{ amount: string; timestamp: number }>;
+        try {
+            const res = await readContract(config, ({
+                address: CONTRACT_ADDRESS as `0x${string}`,
+                abi: CONTRACT_ABI as Abi,
+                functionName: 'getUnstakeHistory',
+                args: [address as `0x${string}`],
+            } as any)) as ReadonlyArray<readonly [bigint, bigint]>; // eslint-disable-line @typescript-eslint/no-explicit-any
+            return (res as ReadonlyArray<readonly [bigint, bigint]>).map((e) => ({ amount: (e?.[0] ?? 0n).toString(), timestamp: Number(e?.[1] ?? 0n) }));
+        } catch (e) {
+            return [] as Array<{ amount: string; timestamp: number }>;
+        }
+    }
+
+    // ROI history
+    async function fetchROIHistoryFull() {
+        if (!address) return [] as Array<{ amount: string; timestamp: number }>;
+        try {
+            const res = await readContract(config, ({
+                address: CONTRACT_ADDRESS as `0x${string}`,
+                abi: CONTRACT_ABI as Abi,
+                functionName: 'getFullROIHistory',
+                args: [address as `0x${string}`],
+            } as any)) as ReadonlyArray<readonly [bigint, bigint]>; // eslint-disable-line @typescript-eslint/no-explicit-any
+            return (res as ReadonlyArray<readonly [bigint, bigint]>).map((e) => ({ amount: (e?.[0] ?? 0n).toString(), timestamp: Number(e?.[1] ?? 0n) }));
+        } catch (e) {
+            return [] as Array<{ amount: string; timestamp: number }>;
+        }
+    }
+
+    async function fetchLastNROIEvents(max: number) {
+        if (!address) return [] as Array<{ amount: string; timestamp: number }>;
+        try {
+            const res = await readContract(config, ({
+                address: CONTRACT_ADDRESS as `0x${string}`,
+                abi: CONTRACT_ABI as Abi,
+                functionName: 'getLastNEventsROI',
+                args: [address as `0x${string}`, BigInt(Math.max(1, max))],
+            } as any)) as readonly [readonly bigint[], readonly bigint[]]; // eslint-disable-line @typescript-eslint/no-explicit-any
+            const amounts: readonly bigint[] = res[0] as readonly bigint[];
+            const timestamps: readonly bigint[] = res[1] as readonly bigint[];
+            const out: Array<{ amount: string; timestamp: number }> = [];
+            const len = Math.min(amounts?.length || 0, timestamps?.length || 0);
+            for (let i = 0; i < len; i++) {
+                out.push({ amount: (amounts[i] ?? 0n).toString(), timestamp: Number(timestamps[i] ?? 0n) });
+            }
+            return out;
+        } catch (e) {
+            return [] as Array<{ amount: string; timestamp: number }>;
+        }
     }
 
     return {
@@ -961,6 +1079,9 @@ export function useStakingContract() {
         rankInfo,
         // bonds helper
         fetchUserBonds,
+        fetchBondPlans,
+        buyBond,
+        withdrawBond,
         // new: user report & directs
         userReport,
         directsList,
@@ -968,5 +1089,10 @@ export function useStakingContract() {
         // activity & team
         fetchUserActivity,
         fetchDownlinesByLevel,
+        // histories
+        fetchStakeHistory,
+        fetchUnstakeHistory,
+        fetchROIHistoryFull,
+        fetchLastNROIEvents,
     };
 }
