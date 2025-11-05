@@ -87,7 +87,7 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "totalWithBonus",
+                "name": "reward",
                 "type": "uint256"
             }
         ],
@@ -112,7 +112,7 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "principal",
                 "type": "uint256"
             }
         ],
@@ -136,19 +136,6 @@
             }
         ],
         "name": "CompanyPoolFunded",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            }
-        ],
-        "name": "CompanyPoolUsed",
         "type": "event"
     },
     {
@@ -180,19 +167,6 @@
         "anonymous": false,
         "inputs": [
             {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "price18",
-                "type": "uint256"
-            }
-        ],
-        "name": "ManualPriceSet",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
                 "indexed": true,
                 "internalType": "address",
                 "name": "previousOwner",
@@ -206,19 +180,6 @@
             }
         ],
         "name": "OwnershipTransferred",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": false,
-                "internalType": "address",
-                "name": "pair",
-                "type": "address"
-            }
-        ],
-        "name": "PricePairSet",
         "type": "event"
     },
     {
@@ -270,11 +231,42 @@
             {
                 "indexed": false,
                 "internalType": "uint8",
-                "name": "toLevelIndex",
+                "name": "levelIndex",
                 "type": "uint8"
             }
         ],
         "name": "ReferralCreditedFromPool",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "grossAmount",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "userAmount",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "totalCommission",
+                "type": "uint256"
+            }
+        ],
+        "name": "RoiClaimed",
         "type": "event"
     },
     {
@@ -320,7 +312,7 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "usdLocked18",
+                "name": "usdLocked",
                 "type": "uint256"
             }
         ],
@@ -345,7 +337,7 @@
             {
                 "indexed": false,
                 "internalType": "uint256",
-                "name": "usdReduced18",
+                "name": "usdReduced",
                 "type": "uint256"
             }
         ],
@@ -394,6 +386,43 @@
     {
         "inputs": [
             {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "name": "allUsers",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "fromIndex",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "toIndex",
+                "type": "uint256"
+            }
+        ],
+        "name": "batchCompoundAllUsers",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "uint8",
                 "name": "",
                 "type": "uint8"
@@ -423,25 +452,6 @@
     {
         "inputs": [
             {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "bondsLength",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
                 "internalType": "uint8",
                 "name": "planId",
                 "type": "uint8"
@@ -450,9 +460,21 @@
                 "internalType": "uint256",
                 "name": "principal",
                 "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "referrer",
+                "type": "address"
             }
         ],
         "name": "buyBond",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "claimRoi",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -590,19 +612,18 @@
         "type": "function"
     },
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getDirects",
+        "inputs": [],
+        "name": "getCompanyPoolStatus",
         "outputs": [
             {
-                "internalType": "address[]",
-                "name": "",
-                "type": "address[]"
+                "internalType": "uint256",
+                "name": "poolBalanceLogical",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "contractTokenBalance",
+                "type": "uint256"
             }
         ],
         "stateMutability": "view",
@@ -616,7 +637,31 @@
                 "type": "address"
             }
         ],
-        "name": "getFullROIHistory",
+        "name": "getDirectsWithRewards",
+        "outputs": [
+            {
+                "internalType": "address[]",
+                "name": "directs",
+                "type": "address[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "rewards",
+                "type": "uint256[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "getStakeHistory",
         "outputs": [
             {
                 "components": [
@@ -647,96 +692,12 @@
                 "type": "address"
             }
         ],
-        "name": "getLast10DaysROI",
+        "name": "getTeamSize",
         "outputs": [
             {
                 "internalType": "uint256",
                 "name": "",
                 "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "daysCount",
-                "type": "uint256"
-            }
-        ],
-        "name": "getLastNDaysROI",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "total",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "maxEvents",
-                "type": "uint256"
-            }
-        ],
-        "name": "getLastNEventsROI",
-        "outputs": [
-            {
-                "internalType": "uint256[]",
-                "name": "amounts",
-                "type": "uint256[]"
-            },
-            {
-                "internalType": "uint256[]",
-                "name": "timestamps",
-                "type": "uint256[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getStakeHistory",
-        "outputs": [
-            {
-                "components": [
-                    {
-                        "internalType": "uint256",
-                        "name": "amount",
-                        "type": "uint256"
-                    },
-                    {
-                        "internalType": "uint256",
-                        "name": "timestamp",
-                        "type": "uint256"
-                    }
-                ],
-                "internalType": "struct StakingPlatform.HistoryEntry[]",
-                "name": "",
-                "type": "tuple[]"
             }
         ],
         "stateMutability": "view",
@@ -756,50 +717,8 @@
         "type": "function"
     },
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getUnstakeHistory",
-        "outputs": [
-            {
-                "components": [
-                    {
-                        "internalType": "uint256",
-                        "name": "amount",
-                        "type": "uint256"
-                    },
-                    {
-                        "internalType": "uint256",
-                        "name": "timestamp",
-                        "type": "uint256"
-                    }
-                ],
-                "internalType": "struct StakingPlatform.HistoryEntry[]",
-                "name": "",
-                "type": "tuple[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            },
-            {
-                "internalType": "uint8",
-                "name": "levelIndex",
-                "type": "uint8"
-            }
-        ],
-        "name": "getUserLevelIncome",
+        "inputs": [],
+        "name": "getTotalUsers",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -822,37 +741,17 @@
         "outputs": [
             {
                 "internalType": "uint256",
-                "name": "originalStaked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "originalUsdLocked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "compoundedStake",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "compoundedStakeWithAccrued",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "selfStakedUsdLocked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "currentUsdStakedLive",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
                 "name": "pendingRoi",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "stakeWithAccrued",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "usdStakedLive",
                 "type": "uint256"
             },
             {
@@ -861,34 +760,57 @@
                 "type": "uint8"
             },
             {
-                "internalType": "uint8",
-                "name": "rank",
-                "type": "uint8"
-            },
-            {
                 "internalType": "uint256",
-                "name": "directs",
+                "name": "bondCount",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "totalRoiEarned",
+                "name": "roiHistoryCount",
                 "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
             },
             {
-                "internalType": "uint256",
-                "name": "totalLevelRewardEarned",
-                "type": "uint256"
-            },
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "incomeFromDirect",
+        "outputs": [
             {
                 "internalType": "uint256",
-                "name": "totalReferralIncome",
+                "name": "",
                 "type": "uint256"
-            },
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
             {
-                "internalType": "uint256",
-                "name": "totalWithdrawn",
-                "type": "uint256"
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "isUserRegistered",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
             }
         ],
         "stateMutability": "view",
@@ -1239,7 +1161,12 @@
             },
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "principal",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "reward",
                 "type": "uint256"
             },
             {
@@ -1284,6 +1211,11 @@
             {
                 "internalType": "uint256",
                 "name": "selfStakedUsdLocked",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "activeBondValue",
                 "type": "uint256"
             },
             {

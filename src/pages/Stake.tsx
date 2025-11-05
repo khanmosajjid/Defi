@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { useStakingContract } from "@/service/stakingService";
 import { useAccount, useChainId } from "wagmi";
@@ -16,6 +16,7 @@ export default function Stake() {
   const [referralAddress, setReferralAddress] = useState("");
   const [unstakeAmount, setUnstakeAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [quotedETHAN, setQuotedETHAN] = useState("0");
 
   const {
@@ -30,10 +31,14 @@ export default function Stake() {
     userLevel,
     userRewardPercent,
     unstake: unstakeTx,
-    claimRewards,
+    claimRoi,
     fetchROIHistoryFull,
     fetchLastNROIEvents,
     fetchUserLevelIncome,
+    fetchStakeHistory,
+    fetchUnstakeHistory,
+    directsWithBalances,
+    loadingDirects,
   } = useStakingContract();
 
   console.log("User Info:", userInfo);
@@ -48,6 +53,22 @@ export default function Stake() {
   const tokens = {
     USDT: "0xbD740AFeAa78f104E5E0f6edb0e23e96ED9fEfC8",
     ETHAN: CONTRACT_ADDRESSES.token,
+  };
+
+  const formatWeiToEtn = (value?: string) => {
+    try {
+      if (!value) return "0";
+      const bn = BigInt(value);
+      return (Number(bn / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  };
+
+  const shortenDirectAddress = (addr?: string) => {
+    if (!addr) return "-";
+    if (addr.length <= 12) return addr;
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   // Auto quote ETHAN when user types USDT amount
@@ -69,18 +90,19 @@ export default function Stake() {
   }, [stakeAmount, getQuote, tokens.USDT, tokens.ETHAN]);
 
   const userStaked = userInfo?.selfStaked ?? "0";
-  const userStakedHuman = (() => {
-    try {
-      const bn = BigInt(userStaked || "0");
-      return (Number(bn / 10n ** 15n) / 1000).toLocaleString();
-    } catch {
-      return "0";
-    }
-  })();
+  const userStakedHuman = formatWeiToEtn(userStaked);
   const pendingRewards =
     pendingRewardsRaw && pendingRewardsRaw !== "0"
       ? pendingRewardsRaw
       : pendingComputed || "0";
+  const pendingRewardsHuman = formatWeiToEtn(pendingRewards);
+  const hasClaimableRewards = (() => {
+    try {
+      return BigInt(pendingRewards) > 0n;
+    } catch {
+      return false;
+    }
+  })();
   const directs = userInfo?.directs ?? 0;
   const totalIncome = (() => {
     try {
@@ -144,6 +166,20 @@ export default function Stake() {
     const numAmount = parseFloat(amount) || 0;
     const dailyReward = numAmount * 0.012;
     return dailyReward.toFixed(2);
+  };
+
+  const handleClaimRoi = async () => {
+    if (isClaiming) return;
+    try {
+      setIsClaiming(true);
+      await claimRoi();
+      await refetchPendingRewards();
+      await refetchUserInfo();
+    } catch (err) {
+      console.error("Claim ROI failed", err);
+    } finally {
+      setIsClaiming(false);
+    }
   };
 
   const handleSwapAndStake = async () => {
@@ -270,20 +306,8 @@ export default function Stake() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
           <StatCard
             title="Your Staked Amount"
-            value={
-              userStaked
-                ? (
-                    Number(BigInt(userStaked) / 10n ** 15n) / 1000
-                  ).toLocaleString() + " ETN"
-                : "0 ETN"
-            }
-            change={`+${
-              pendingRewards
-                ? (
-                    Number(BigInt(pendingRewards) / 10n ** 15n) / 1000
-                  ).toLocaleString()
-                : "0"
-            } pending`}
+            value={`${userStakedHuman} ETN`}
+            change={`+${pendingRewardsHuman} pending`}
             changeType="positive"
             icon={<Coins className="w-5 h-5" />}
             description="Currently staked"
@@ -463,10 +487,10 @@ export default function Stake() {
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span>Daily Rewards:</span>
+                            {/* <span>Daily Rewards:</span>
                             <span className="text-green-400">
                               +{calculateRewards(stakeAmount)} ETN
-                            </span>
+                            </span> */}
                           </div>
                         </div>
                       )}
@@ -543,28 +567,107 @@ export default function Stake() {
               <CardContent>
                 <div className="text-center mb-4">
                   <p className="text-3xl font-bold text-white">
-                    {pendingRewards
-                      ? (
-                          Number(BigInt(pendingRewards) / 10n ** 15n) / 1000
-                        ).toLocaleString() + " ETN"
-                      : "0 ETN"}
+                    {pendingRewardsHuman} ETN
                   </p>
                 </div>
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                  onClick={async () => {
-                    try {
-                      await claimRewards();
-                      refetchPendingRewards();
-                      refetchUserInfo();
-                    } catch (e) {
-                      console.error("Claim failed", e);
-                      toast.error("Claim transaction failed");
-                    }
-                  }}
-                >
-                  Claim Rewards
-                </Button>
+                <p className="text-xs text-gray-400 text-center mb-2">
+                  Rewards are compounded back into your stake automatically. Use
+                  the refresh button to fetch the latest accrued amount or
+                  unstake to realize profits.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                    disabled={!hasClaimableRewards || isClaiming}
+                    onClick={handleClaimRoi}
+                  >
+                    {isClaiming ? "Claiming..." : "Claim ROI"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                    onClick={async () => {
+                      try {
+                        await refetchPendingRewards();
+                        refetchUserInfo();
+                        toast.success("Pending rewards updated");
+                      } catch (e) {
+                        console.error("Refresh failed", e);
+                        toast.error("Failed to refresh rewards");
+                      }
+                    }}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Direct Referral Balances */}
+            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+              <CardHeader>
+                <CardTitle className="text-yellow-400">
+                  Direct Referral Balances
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingDirects ? (
+                  <p className="text-xs text-gray-500">Loading directs…</p>
+                ) : directsWithBalances && directsWithBalances.length > 0 ? (
+                  <div className="space-y-3 max-h-72 overflow-auto pr-1">
+                    {directsWithBalances.map((direct) => (
+                      <div
+                        key={direct.address}
+                        className="flex items-start justify-between bg-gray-900/60 px-3 py-2 rounded"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {shortenDirectAddress(direct.address)}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {direct.level > 0
+                              ? `Level L${direct.level}`
+                              : "Level —"}
+                          </p>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <p className="text-sm text-yellow-400">
+                            {formatWeiToEtn(direct.selfStaked)} ETN
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Live: {formatWeiToEtn(direct.stakeWithAccrued)} ETN
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Income: {formatWeiToEtn(direct.referralIncome)} ETN
+                          </p>
+                          <p className="text-xs text-green-400">
+                            +{formatWeiToEtn(direct.pendingRoi)} pending
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    No direct referrals yet. Share your referral link to grow
+                    your team.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Stake & Unstake History */}
+            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+              <CardHeader>
+                <CardTitle className="text-yellow-400">
+                  Stake &amp; Unstake History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StakeActivityList
+                  fetchStakeHistory={fetchStakeHistory}
+                  fetchUnstakeHistory={fetchUnstakeHistory}
+                />
               </CardContent>
             </Card>
 
@@ -593,6 +696,133 @@ export default function Stake() {
               </CardContent>
             </Card>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StakeActivityList({
+  fetchStakeHistory,
+  fetchUnstakeHistory,
+}: {
+  fetchStakeHistory: () => Promise<
+    Array<{ amount: string; timestamp: number }>
+  >;
+  fetchUnstakeHistory: () => Promise<
+    Array<{ amount: string; timestamp: number }>
+  >;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [stakes, setStakes] = useState<
+    Array<{ amount: string; timestamp: number }>
+  >([]);
+  const [unstakes, setUnstakes] = useState<
+    Array<{ amount: string; timestamp: number }>
+  >([]);
+
+  const formatAmount = (v?: string) => {
+    try {
+      if (!v) return "0";
+      return (Number(BigInt(v) / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  };
+
+  const formatTime = (ts?: number) => {
+    try {
+      if (!ts) return "-";
+      return new Date(ts * 1000).toLocaleString();
+    } catch {
+      return "-";
+    }
+  };
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [stakeItems, unstakeItems] = await Promise.all([
+        fetchStakeHistory(),
+        fetchUnstakeHistory(),
+      ]);
+      setStakes(Array.isArray(stakeItems) ? stakeItems : []);
+      setUnstakes(Array.isArray(unstakeItems) ? unstakeItems : []);
+    } catch (err) {
+      console.error("History load failed", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchStakeHistory, fetchUnstakeHistory]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-400">
+          Track your latest stake and unstake actions.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+          onClick={load}
+          disabled={loading}
+        >
+          {loading
+            ? "Loading…"
+            : stakes.length || unstakes.length
+            ? "Refresh"
+            : "Load"}
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs text-gray-400 mb-1">Stakes</p>
+          {stakes.length === 0 ? (
+            <p className="text-xs text-gray-500">No stakes yet</p>
+          ) : (
+            <ul className="space-y-1">
+              {stakes.map((entry, idx) => (
+                <li
+                  key={`stake-${idx}`}
+                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                >
+                  <span className="text-gray-200">
+                    {formatTime(entry.timestamp)}
+                  </span>
+                  <span className="text-yellow-400">
+                    {formatAmount(entry.amount)} ETN
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 mb-1">Unstakes</p>
+          {unstakes.length === 0 ? (
+            <p className="text-xs text-gray-500">No unstakes yet</p>
+          ) : (
+            <ul className="space-y-1">
+              {unstakes.map((entry, idx) => (
+                <li
+                  key={`unstake-${idx}`}
+                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                >
+                  <span className="text-gray-200">
+                    {formatTime(entry.timestamp)}
+                  </span>
+                  <span className="text-yellow-400">
+                    {formatAmount(entry.amount)} ETN
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>

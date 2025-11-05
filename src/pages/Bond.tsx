@@ -22,6 +22,7 @@ export default function Bond() {
     buyBond,
     withdrawBond,
     tokenBalance,
+    userInfo,
   } = useStakingContract();
   const [plans, setPlans] = useState<
     Array<{
@@ -33,6 +34,7 @@ export default function Bond() {
   >([]);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [bondAmount, setBondAmount] = useState("");
+  const [referralAddress, setReferralAddress] = useState("");
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingUserBonds, setLoadingUserBonds] = useState(false);
   const [userBonds, setUserBonds] = useState<
@@ -81,6 +83,37 @@ export default function Bond() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get("ref");
+      if (ref && ref.startsWith("0x")) {
+        setReferralAddress((prev) => (prev ? prev : ref));
+      }
+    } catch (err) {
+      console.error("Failed to parse referral from URL", err);
+    }
+  }, []);
+
+  const hasRegisteredReferrer = (() => {
+    const ref = userInfo?.referrer;
+    if (!ref) return false;
+    try {
+      return (
+        typeof ref === "string" &&
+        ref.toLowerCase() !== "0x0000000000000000000000000000000000000000"
+      );
+    } catch {
+      return false;
+    }
+  })();
+
+  useEffect(() => {
+    if (hasRegisteredReferrer) {
+      setReferralAddress("");
+    }
+  }, [hasRegisteredReferrer]);
+
   const tokenBalanceHuman = useMemo(() => {
     try {
       const bn = BigInt(tokenBalance || "0");
@@ -97,7 +130,12 @@ export default function Bond() {
 
   async function handleBuy() {
     if (!selectedPlan || !bondAmount || Number(bondAmount) <= 0) return;
-    await buyBond(selectedPlan.id, bondAmount);
+    const overrideRef = hasRegisteredReferrer
+      ? undefined
+      : referralAddress && referralAddress.startsWith("0x")
+      ? referralAddress
+      : undefined;
+    await buyBond(selectedPlan.id, bondAmount, overrideRef);
     setBondAmount("");
     await reloadUserBonds();
   }
@@ -240,6 +278,32 @@ export default function Bond() {
                           </Button>
                         </div>
                       </div>
+
+                      {hasRegisteredReferrer ? (
+                        <div className="text-sm text-gray-400">
+                          Referrer:{" "}
+                          <span className="text-yellow-400">
+                            {userInfo?.referrerShort ?? "Registered"}
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-sm text-gray-400 mb-2 block">
+                            Referral Address (optional)
+                          </label>
+                          <Input
+                            type="text"
+                            placeholder="0x..."
+                            value={referralAddress}
+                            onChange={(e) => setReferralAddress(e.target.value)}
+                            className="bg-gray-900 border-gray-700 text-white"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Provide a sponsor wallet to register before your
+                            first bond purchase.
+                          </p>
+                        </div>
+                      )}
 
                       {bondAmount && selectedPlan && (
                         <div className="bg-gray-900 p-4 rounded-lg space-y-2">

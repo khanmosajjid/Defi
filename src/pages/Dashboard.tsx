@@ -14,6 +14,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Users,
 } from "lucide-react";
 import { STATS } from "@/lib/constants";
 
@@ -235,7 +236,9 @@ export default function Dashboard() {
     rankInfo,
     fetchUserBonds,
     userReport,
-    directsList,
+    directsWithBalances,
+    loadingDirects,
+    teamSize,
     fetchUserLevelIncome,
     fetchUserActivity,
     fetchDownlinesByLevel,
@@ -258,6 +261,24 @@ export default function Dashboard() {
     pendingRewards: `${pendingRewardsHuman || pendingComputedHuman || "0"} ETN`,
     bondValue: `${formatWeiToETN(totalStaked?.toString?.() ?? "0")} ETN`,
   };
+
+  const totalDirectIncomeHuman = (() => {
+    try {
+      const sum =
+        directsWithBalances?.reduce((acc, direct) => {
+          try {
+            return acc + BigInt(direct.referralIncome ?? "0");
+          } catch {
+            return acc;
+          }
+        }, 0n) ?? 0n;
+      return (Number(sum / 10n ** 15n) / 1000).toLocaleString();
+    } catch {
+      return "0";
+    }
+  })();
+
+  const activeBondValueHuman = formatWeiToETN(userInfo?.activeBondValue);
 
   const portfolioChange = {
     daily: "+5.67%",
@@ -474,6 +495,33 @@ export default function Dashboard() {
           />
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <StatCard
+            title="Team Size"
+            value={`${teamSize ?? 0}`}
+            change="Across all levels"
+            changeType="neutral"
+            icon={<Users className="w-5 h-5" />}
+            description="Total members in your downline"
+          />
+          <StatCard
+            title="Direct Income"
+            value={`${totalDirectIncomeHuman} ETN`}
+            change="Earned from directs"
+            changeType="positive"
+            icon={<Gift className="w-5 h-5" />}
+            description="Aggregate payouts from directs"
+          />
+          <StatCard
+            title="Active Bond Value"
+            value={`${activeBondValueHuman} ETN`}
+            change="Boosts ROI accrual"
+            changeType="positive"
+            icon={<TrendingUp className="w-5 h-5" />}
+            description="Principal + rewards still vesting"
+          />
+        </div>
+
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Portfolio Performance */}
@@ -600,31 +648,74 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div className="mt-3">
-                        <p className="text-sm text-gray-400 mb-1">
-                          Direct Referrals
-                        </p>
-                        {directsList && directsList.length > 0 ? (
-                          <ul className="space-y-1">
-                            {directsList.map((addr) => (
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm text-gray-400">
+                            Direct Referrals
+                          </p>
+                          {loadingDirects ? (
+                            <span className="text-xs text-yellow-400">
+                              Loading…
+                            </span>
+                          ) : null}
+                        </div>
+                        {loadingDirects ? (
+                          <p className="text-gray-500 text-sm">
+                            Fetching direct balances…
+                          </p>
+                        ) : directsWithBalances &&
+                          directsWithBalances.length > 0 ? (
+                          <ul className="space-y-2">
+                            {directsWithBalances.map((direct) => (
                               <li
-                                key={addr}
-                                className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                                key={direct.address}
+                                className="flex items-start justify-between bg-gray-900/60 px-3 py-2 rounded"
                               >
-                                <span className="text-gray-200">
-                                  {addr.slice(0, 6)}...{addr.slice(-4)}
-                                </span>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await navigator.clipboard.writeText(addr);
-                                    } catch (e) {
-                                      // ignore clipboard errors
-                                    }
-                                  }}
-                                  className="text-xs text-yellow-400 hover:underline"
-                                >
-                                  Copy
-                                </button>
+                                <div>
+                                  <p className="text-gray-200">
+                                    {direct.address.slice(0, 6)}...
+                                    {direct.address.slice(-4)}
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    Staked:
+                                    <span className="ml-1 text-yellow-400">
+                                      {formatWeiToETN(direct.selfStaked)} ETN
+                                    </span>
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    Pending ROI:
+                                    <span className="ml-1 text-green-400">
+                                      {formatWeiToETN(direct.pendingRoi)} ETN
+                                    </span>
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    Referral Income:
+                                    <span className="ml-1 text-blue-400">
+                                      {formatWeiToETN(direct.referralIncome)}{" "}
+                                      ETN
+                                    </span>
+                                  </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-1">
+                                  {direct.level ? (
+                                    <span className="text-xs text-gray-400">
+                                      Level {direct.level}
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await navigator.clipboard.writeText(
+                                          direct.address
+                                        );
+                                      } catch (e) {
+                                        // ignore clipboard errors
+                                      }
+                                    }}
+                                    className="text-xs text-yellow-400 hover:underline"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
                               </li>
                             ))}
                           </ul>
