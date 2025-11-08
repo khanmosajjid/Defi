@@ -51,7 +51,7 @@ export default function Stake() {
   const [refFromUrl, setRefFromUrl] = useState<string | null>(null);
 
   const tokens = {
-    USDT: "0xbD740AFeAa78f104E5E0f6edb0e23e96ED9fEfC8",
+    USDT: "0x55d398326f99059fF775485246999027B3197955",
     ETHAN: CONTRACT_ADDRESSES.token,
   };
 
