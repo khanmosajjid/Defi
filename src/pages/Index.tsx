@@ -18,6 +18,7 @@ import {
   Star,
 } from "lucide-react";
 import { STATS } from "@/lib/constants";
+import { formatUnits } from "viem";
 
 export default function Index() {
   const [currentStat, setCurrentStat] = useState(0);
@@ -41,6 +42,18 @@ export default function Index() {
     }
   };
 
+  const formatUsdPrice = (raw?: string) => {
+    if (!raw || raw === "0") return null;
+    try {
+      const units = formatUnits(BigInt(raw), 18);
+      const numeric = Number.parseFloat(units);
+      if (Number.isNaN(numeric)) return null;
+      return numeric.toFixed(4);
+    } catch {
+      return null;
+    }
+  };
+
   const heroStats = [
     {
       label: "Total Staked",
@@ -50,11 +63,9 @@ export default function Index() {
     {
       label: "Token Price (USD)",
       value:
-        tokenPriceUsd && tokenPriceUsd !== "0"
-          ? Number(BigInt(tokenPriceUsd) / 10n ** 18n).toFixed(4)
-          : manualTokenPrice && manualTokenPrice !== "0"
-          ? Number(BigInt(manualTokenPrice) / 10n ** 18n).toFixed(4)
-          : "N/A",
+        formatUsdPrice(tokenPriceUsd) ??
+        formatUsdPrice(manualTokenPrice) ??
+        "N/A",
       prefix: "$",
     },
     {

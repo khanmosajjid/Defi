@@ -232,6 +232,7 @@ export default function Dashboard() {
     userRewardPercent,
     refetchTotalStaked,
     userRank,
+    userRankName,
     levelInfo,
     rankInfo,
     fetchUserBonds,
@@ -599,10 +600,22 @@ export default function Dashboard() {
                       <div className="p-4 bg-gray-800 rounded-lg">
                         <p className="text-sm text-gray-400">Rank</p>
                         <p className="text-lg font-semibold">
-                          {userRank && userRank > 0 ? `R${userRank}` : "None"}
+                          {userRank && userRank > 0
+                            ? userRankName
+                              ? `${userRankName} (R${userRank})`
+                              : `R${userRank}`
+                            : "None"}
                         </p>
                         {rankInfo && (
                           <div className="mt-2 text-sm text-gray-300 space-y-1">
+                            {rankInfo.name && (
+                              <p>
+                                Title:{" "}
+                                <span className="text-yellow-400">
+                                  {rankInfo.name}
+                                </span>
+                              </p>
+                            )}
                             <p>
                               Company Share:{" "}
                               <span className="text-yellow-400">

@@ -33,6 +33,14 @@ export const STATS = {
   rebaseInterval: '0',
 } as const;
 
+export const RANK_NAMES = {
+  1: 'Visionary',
+  2: 'Mentorink',
+  3: 'Peak Performer',
+  4: 'King Maker',
+  5: 'Legacy Ambassador',
+} as const;
+
 export const TOKEN_INFO = {
   name: 'ETHAN',
   symbol: 'ETH',
@@ -40,14 +48,28 @@ export const TOKEN_INFO = {
   totalSupply: '1000000000',
 } as const;
 
+//testnet
+// export const CONTRACT_ADDRESSES = {
+//   stakingPlatform: '0x841e74733375F72d8E5Bf81D3f8D9bb27e4600e6',
+//   token: '0x3e88cff91778BAC662C3d912bF575493828Ac9Cf',
+// } as const;
+
+//mainnet
 export const CONTRACT_ADDRESSES = {
-  stakingPlatform: '0x841e74733375F72d8E5Bf81D3f8D9bb27e4600e6',
-  token: '0x3e88cff91778BAC662C3d912bF575493828Ac9Cf',
+  stakingPlatform: '0x3F5e5dCdC737f751881ef60Ed3bcDF82f3de5466',
+  token: '0xE1a2EC79D7b56D13DE7b6dDcfc97004b23A33ff0',
 } as const;
 
+//testnet PancakeSwap V2 Addresses
+// export const PANCAKESWAP_V2_ADDRESSES = {
+//   ROUTER: '0xD99D1c33F9fC3444f8101754aBC46c52416550D1', // PancakeSwap V2 Router on BSC Testnet
+//   FACTORY: '0x6725F303b657a9451d8BA641348b6761A6CC7a17', // PancakeSwap V2 Factory on BSC Testnet
+// }
+
+//mainnet PancakeSwap V2 Addresses
 export const PANCAKESWAP_V2_ADDRESSES = {
-  ROUTER: '0xD99D1c33F9fC3444f8101754aBC46c52416550D1', // PancakeSwap V2 Router on BSC Testnet
-  FACTORY: '0x6725F303b657a9451d8BA641348b6761A6CC7a17', // PancakeSwap V2 Factory on BSC Testnet
+  ROUTER: '0x10ED43C718714eb63d5aA57B78B54704E256024E', // PancakeSwap V2 Router on BSC Mainnet
+  FACTORY: '0xCA143Ce32Fe78f1f7019d7d551a6402fC5350c73', // PancakeSwap V2 Factory on BSC Mainnet
 }
 
 // ERC20 ABI for token operations

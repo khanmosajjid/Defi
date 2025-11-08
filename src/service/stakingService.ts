@@ -6,7 +6,7 @@ import { parseAbiItem, parseEther } from 'viem';
 import { readContract, getPublicClient } from '@wagmi/core';
 
 import { writeAndWaitForReceipt } from '@/lib/wagmiWrite';
-import { CONTRACT_ADDRESSES } from '@/lib/constants';
+import { CONTRACT_ADDRESSES, RANK_NAMES } from '@/lib/constants';
 import CONTRACT_ABI from '@/service/stakingABI.json';
 import { config } from '@/lib/wagmiConfig';
 
@@ -132,6 +132,12 @@ function formatUnits(raw?: string | number | bigint | null, decimals = 18) {
     }
 }
 
+function getRankName(rank: number | null | undefined) {
+    if (!rank || rank <= 0) return null;
+    const key = rank as keyof typeof RANK_NAMES;
+    return RANK_NAMES[key] ?? `Rank ${rank}`;
+}
+
 export function useStakingContract() {
     const { address } = useAccount();
     const chainId = useChainId();
@@ -232,6 +238,7 @@ export function useStakingContract() {
         } catch {
             level = 0;
         }
+        const rankValue = Number(extractString(arr[9]) ?? '0');
         return {
             originalStaked: extractString(arr[0]) ?? '0',
             originalUsdLocked: extractString(arr[1]) ?? '0',
@@ -243,7 +250,8 @@ export function useStakingContract() {
             referrerShort: shortenAddress(arr[6] as string),
             directs: Number(extractString(arr[7]) ?? '0'),
             level,
-            rank: Number(extractString(arr[9]) ?? '0'),
+            rank: rankValue,
+            rankName: getRankName(rankValue),
             totalRoiEarned: extractString(arr[10]) ?? '0',
             totalLevelRewardEarned: extractString(arr[11]) ?? '0',
             totalReferralIncome: extractString(arr[12]) ?? '0',
@@ -281,6 +289,7 @@ export function useStakingContract() {
 
     const userLevel = userReport?.displayLevel ?? userInfo?.level ?? 0;
     const userRank = userInfo?.rank ?? 0;
+    const userRankName = useMemo(() => getRankName(userRank), [userRank]);
 
     const levelIndex = userLevel > 0 ? BigInt(userLevel - 1) : 0n;
     const { data: levelRaw } = useReadContract({
@@ -302,6 +311,7 @@ export function useStakingContract() {
 
     const rankInfo = rankRaw
         ? {
+            name: userRankName,
             incomeReqFromTop3Usd: extractString((rankRaw as unknown[])[0]) ?? '0',
             directReq: extractString((rankRaw as unknown[])[1]) ?? '0',
             companySharePercent: Number(extractString((rankRaw as unknown[])[2]) ?? '0'),
@@ -1210,6 +1220,7 @@ export function useStakingContract() {
         userLevel,
         userRewardPercent,
         userRank,
+        userRankName,
         levelInfo: levelRaw
             ? {
                 rewardPercent: Number(extractString((levelRaw as unknown[])[0]) ?? '0'),
