@@ -14,6 +14,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useStakingContract } from "@/service/stakingService";
+import { DEFAULT_REFERRER } from "@/lib/constants";
 
 export default function Bond() {
   const {
@@ -34,7 +35,7 @@ export default function Bond() {
   >([]);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [bondAmount, setBondAmount] = useState("");
-  const [referralAddress, setReferralAddress] = useState("");
+  const [referralAddress, setReferralAddress] = useState(DEFAULT_REFERRER);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingUserBonds, setLoadingUserBonds] = useState(false);
   const [userBonds, setUserBonds] = useState<
@@ -88,7 +89,7 @@ export default function Bond() {
       const params = new URLSearchParams(window.location.search);
       const ref = params.get("ref");
       if (ref && ref.startsWith("0x")) {
-        setReferralAddress((prev) => (prev ? prev : ref));
+        setReferralAddress(ref);
       }
     } catch (err) {
       console.error("Failed to parse referral from URL", err);
@@ -111,6 +112,10 @@ export default function Bond() {
   useEffect(() => {
     if (hasRegisteredReferrer) {
       setReferralAddress("");
+    } else {
+      setReferralAddress((prev) =>
+        prev && prev.trim() ? prev : DEFAULT_REFERRER
+      );
     }
   }, [hasRegisteredReferrer]);
 
@@ -134,7 +139,7 @@ export default function Bond() {
       ? undefined
       : referralAddress && referralAddress.startsWith("0x")
       ? referralAddress
-      : undefined;
+      : DEFAULT_REFERRER;
     await buyBond(selectedPlan.id, bondAmount, overrideRef);
     setBondAmount("");
     await reloadUserBonds();

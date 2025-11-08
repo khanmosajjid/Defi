@@ -41,6 +41,8 @@ export const RANK_NAMES = {
   5: 'Legacy Ambassador',
 } as const;
 
+export const DEFAULT_REFERRER = '0xc607CD122fF8d21fbaECc4305aFE1E357d624137' as const;
+
 export const TOKEN_INFO = {
   name: 'ETHAN',
   symbol: 'ETH',

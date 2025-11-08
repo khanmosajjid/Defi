@@ -8,12 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatCard from "@/components/common/StatCard";
 import { Coins, TrendingUp, Clock, Zap, ArrowRight } from "lucide-react";
-import { STATS, CONTRACT_ADDRESSES } from "@/lib/constants";
+import { STATS, CONTRACT_ADDRESSES, DEFAULT_REFERRER } from "@/lib/constants";
 import { useTokenSwap } from "@/hooks/useTokenSwap";
 
 export default function Stake() {
   const [stakeAmount, setStakeAmount] = useState("");
-  const [referralAddress, setReferralAddress] = useState("");
+  const [referralAddress, setReferralAddress] = useState(DEFAULT_REFERRER);
   const [unstakeAmount, setUnstakeAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
@@ -144,23 +144,29 @@ export default function Stake() {
       const qp = new URLSearchParams(window.location.search);
       const r = qp.get("ref");
       if (r && typeof r === "string" && r.startsWith("0x")) {
-        if (!hasRegisteredReferrer && !referralAddress) {
-          setReferralAddress(r);
-        }
+        setRefFromUrl(r);
       }
     } catch (e) {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // when userInfo updates, if there's a refFromUrl and no on-chain referrer, keep the referral
+  // keep referral input synchronized with URL/default unless a referrer is registered
   useEffect(() => {
-    if (refFromUrl && !hasRegisteredReferrer && !referralAddress) {
-      setReferralAddress(refFromUrl);
+    if (hasRegisteredReferrer) {
+      setReferralAddress("");
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userInfo, refFromUrl]);
+
+    if (refFromUrl) {
+      setReferralAddress(refFromUrl);
+      return;
+    }
+
+    setReferralAddress((prev) =>
+      prev && prev.trim() ? prev : DEFAULT_REFERRER
+    );
+  }, [refFromUrl, hasRegisteredReferrer]);
 
   const calculateRewards = (amount: string) => {
     const numAmount = parseFloat(amount) || 0;
@@ -201,7 +207,7 @@ export default function Stake() {
       ref = userInfo.referrer as string;
     } else {
       ref = referralAddress?.trim() ?? "";
-      if (!ref || !ref.startsWith("0x")) ref = connectedAddress ?? "";
+      if (!ref || !ref.startsWith("0x")) ref = DEFAULT_REFERRER;
     }
 
     try {
@@ -281,7 +287,7 @@ export default function Stake() {
       await refetchUserInfo();
       await refetchPendingRewards();
       setStakeAmount("");
-      setReferralAddress("");
+      setReferralAddress(hasRegisteredReferrer ? "" : DEFAULT_REFERRER);
     } catch (err) {
       console.error("Swap & stake failed:", err);
       toast.error("Swap & stake failed");

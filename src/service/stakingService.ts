@@ -6,7 +6,7 @@ import { parseAbiItem, parseEther } from 'viem';
 import { readContract, getPublicClient } from '@wagmi/core';
 
 import { writeAndWaitForReceipt } from '@/lib/wagmiWrite';
-import { CONTRACT_ADDRESSES, RANK_NAMES } from '@/lib/constants';
+import { CONTRACT_ADDRESSES, DEFAULT_REFERRER, RANK_NAMES } from '@/lib/constants';
 import CONTRACT_ABI from '@/service/stakingABI.json';
 import { config } from '@/lib/wagmiConfig';
 
@@ -21,6 +21,22 @@ const TOKEN_ADDRESS = CONTRACT_ADDRESSES.token as `0x${string}`;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const APPROVE_AMOUNT = 1_000_000n * 10n ** 18n;
 const ONE_TOKEN = 10n ** 18n;
+function resolveReferrerAddress(
+    candidates: Array<string | undefined | null>,
+    self?: string | null
+): `0x${string}` {
+    const selfLower = self?.toLowerCase();
+    const zeroLower = ZERO_ADDRESS.toLowerCase();
+    for (const candidate of candidates) {
+        if (!candidate || typeof candidate !== 'string') continue;
+        if (!candidate.startsWith('0x')) continue;
+        const lower = candidate.toLowerCase();
+        if (lower === zeroLower) continue;
+        if (selfLower && lower === selfLower) continue;
+        return candidate as `0x${string}`;
+    }
+    return DEFAULT_REFERRER;
+}
 
 function readContractSafe<T = unknown>(params: Record<string, unknown>) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -391,7 +407,7 @@ export function useStakingContract() {
         try {
             const amountWei = parseEther(amount);
             await ensureAllowance(amountWei);
-            const preferredReferrer = referrer && referrer.startsWith('0x') ? referrer : address ?? ZERO_ADDRESS;
+            const preferredReferrer = resolveReferrerAddress([referrer, userInfo?.referrer], address);
             const receipt = await writeAndWaitForReceipt({
                 abi: CONTRACT_ABI as Abi,
                 address: CONTRACT_ADDRESS,
@@ -585,9 +601,7 @@ export function useStakingContract() {
         try {
             const amountWei = parseEther(amount);
             await ensureAllowance(amountWei);
-            const providedRef = referrerOverride && referrerOverride.startsWith('0x') ? referrerOverride : undefined;
-            const existingRef = userInfo?.referrer && userInfo.referrer !== ZERO_ADDRESS ? (userInfo.referrer as string) : undefined;
-            const preferredReferrer = (providedRef ?? existingRef ?? address ?? ZERO_ADDRESS) as `0x${string}`;
+            const preferredReferrer = resolveReferrerAddress([referrerOverride, userInfo?.referrer], address);
             const receipt = await writeAndWaitForReceipt({
                 abi: CONTRACT_ABI as Abi,
                 address: CONTRACT_ADDRESS,
