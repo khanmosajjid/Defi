@@ -39,6 +39,7 @@ export default function Stake() {
     fetchUnstakeHistory,
     directsWithBalances,
     loadingDirects,
+    refetchTokenBalance,
   } = useStakingContract();
 
   console.log("User Info:", userInfo);
@@ -49,9 +50,11 @@ export default function Stake() {
 
   // referral param from URL (if present)
   const [refFromUrl, setRefFromUrl] = useState<string | null>(null);
+  const REFERRAL_STORAGE_KEY = "ethan:lastReferralAddress";
 
   const tokens = {
-    USDT: "0x55d398326f99059fF775485246999027B3197955",
+    // USDT: "0xbD740AFeAa78f104E5E0f6edb0e23e96ED9fEfC8", //testnet
+    USDT: "0x55d398326f99059fF775485246999027B3197955", //mainnet
     ETHAN: CONTRACT_ADDRESSES.token,
   };
 
@@ -69,6 +72,21 @@ export default function Stake() {
     if (!addr) return "-";
     if (addr.length <= 12) return addr;
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const parseBigIntSafe = (value: unknown): bigint | null => {
+    try {
+      if (typeof value === "bigint") return value;
+      if (typeof value === "number") return BigInt(Math.floor(value));
+      if (typeof value === "string") return BigInt(value);
+      if (value && typeof value === "object" && "toString" in value) {
+        const str = (value as { toString: () => string }).toString();
+        if (str) return BigInt(str);
+      }
+    } catch {
+      return null;
+    }
+    return null;
   };
 
   // Auto quote ETHAN when user types USDT amount
@@ -144,13 +162,32 @@ export default function Stake() {
     try {
       const qp = new URLSearchParams(window.location.search);
       const r = qp.get("ref");
-      if (r && typeof r === "string" && r.startsWith("0x")) {
-        setRefFromUrl(r);
+      if (r && typeof r === "string") {
+        const trimmed = r.trim();
+        if (trimmed.startsWith("0x")) {
+          setRefFromUrl(trimmed);
+          localStorage.setItem(REFERRAL_STORAGE_KEY, trimmed);
+          return;
+        }
+      }
+
+      const stored = localStorage.getItem(REFERRAL_STORAGE_KEY);
+      if (stored && stored.startsWith("0x")) {
+        setRefFromUrl(stored);
       }
     } catch (e) {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    if (!refFromUrl || !refFromUrl.startsWith("0x")) return;
+    try {
+      localStorage.setItem(REFERRAL_STORAGE_KEY, refFromUrl);
+    } catch {
+      // ignore storage errors
+    }
+  }, [refFromUrl]);
 
   // keep referral input synchronized with URL/default unless a referrer is registered
   useEffect(() => {
@@ -263,16 +300,48 @@ export default function Stake() {
           return;
         }
 
-        toast.success("Swap completed — proceeding to stake");
+        toast.success("Swap completed — checking received tokens");
+
+        let walletBalanceWei = parseBigIntSafe(tokenBalance) ?? 0n;
+
+        if (typeof refetchTokenBalance === "function") {
+          try {
+            const refreshed = await refetchTokenBalance();
+            const refreshedData = (refreshed as { data?: unknown })?.data;
+            const parsed = parseBigIntSafe(refreshedData);
+            if (parsed !== null) {
+              walletBalanceWei = parsed;
+            }
+          } catch (balanceErr) {
+            console.error(
+              "Failed to refetch ETN balance post-swap",
+              balanceErr
+            );
+          }
+        }
+
+        const quotedFloat = parseFloat(quotedETHAN || "0");
+        const quotedWei =
+          quotedFloat > 0 ? BigInt(Math.floor(quotedFloat * 1e18)) : 0n;
+        let stakeWei = quotedWei > 0n ? (quotedWei * 985n) / 1000n : 0n;
+
+        if (
+          stakeWei > 0n &&
+          walletBalanceWei > 0n &&
+          stakeWei > walletBalanceWei
+        ) {
+          stakeWei = walletBalanceWei;
+        }
+
+        if (quotedWei > 0n && stakeWei === 0n) stakeWei = 1n;
+
+        if (stakeWei <= 0n || walletBalanceWei <= 0n) {
+          toast.error("Insufficient ETN balance after swap");
+          return;
+        }
 
         const stakeToast = toast.loading("Staking...");
         try {
-          // convert quotedETHAN to wei and send 1% less to account for burn on transfer
-          const quotedFloat = parseFloat(quotedETHAN || "0");
-          const quotedWei =
-            quotedFloat > 0 ? BigInt(Math.floor(quotedFloat * 1e18)) : 0n;
-          let stakeWei = quotedWei > 0n ? (quotedWei * 99n) / 100n : 0n;
-          if (quotedWei > 0n && stakeWei === 0n) stakeWei = 1n;
           const whole = stakeWei / 10n ** 18n;
           const frac = stakeWei % 10n ** 18n;
           const tokenStr = `${whole.toString()}.${frac
