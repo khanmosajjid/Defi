@@ -266,11 +266,12 @@ export default function Stake() {
 
         const stakeToast = toast.loading("Staking...");
         try {
-          // convert quotedETHAN to wei then take 98% to stake
+          // convert quotedETHAN to wei and send 1% less to account for burn on transfer
           const quotedFloat = parseFloat(quotedETHAN || "0");
           const quotedWei =
             quotedFloat > 0 ? BigInt(Math.floor(quotedFloat * 1e18)) : 0n;
-          const stakeWei = quotedWei > 0n ? quotedWei : 0n;
+          let stakeWei = quotedWei > 0n ? (quotedWei * 99n) / 100n : 0n;
+          if (quotedWei > 0n && stakeWei === 0n) stakeWei = 1n;
           const whole = stakeWei / 10n ** 18n;
           const frac = stakeWei % 10n ** 18n;
           const tokenStr = `${whole.toString()}.${frac
