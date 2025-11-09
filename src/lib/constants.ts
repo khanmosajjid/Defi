@@ -18,6 +18,7 @@ export const NAVIGATION_ITEMS = [
   { name: 'DASHBOARD', path: '/dashboard', icon: '📊' },
   { name: 'BOND', path: '/bond', icon: '🔗' },
   { name: 'STAKE', path: '/stake', icon: '🥩' },
+  { name: 'REGISTER', path: '/register', icon: '📝' },
   // removed Reward and Swap per product requirements
   // { name: 'INVITE', path: '/invite', icon: '👥' },
   // { name: 'TURBINE', path: '/turbine', icon: '⚡' },

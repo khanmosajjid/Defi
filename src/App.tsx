@@ -12,6 +12,7 @@ import Bond from "./pages/Bond";
 import DAO from "./pages/DAO";
 import NotFound from "./pages/NotFound";
 import { Toaster } from "react-hot-toast";
+import Register from "./pages/Register";
 
 const App = () => (
   <WalletProvider>
@@ -26,6 +27,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/stake" element={<Stake />} />
               <Route path="/bond" element={<Bond />} />
+              <Route path="/register" element={<Register />} />
               {/* Reward and Swap routes removed */}
               <Route
                 path="/invite"
