@@ -137,6 +137,7 @@ export default function Stake() {
     }
   })();
   const networkLabel = chainId ?? "network";
+  const referralLocked = Boolean(refFromUrl && !hasRegisteredReferrer);
 
   // parse referral from URL on first load
   useEffect(() => {
@@ -468,11 +469,21 @@ export default function Stake() {
                               type="text"
                               placeholder="0x..."
                               value={referralAddress}
-                              onChange={(e) =>
-                                setReferralAddress(e.target.value)
-                              }
-                              className="bg-gray-800 border-gray-700 text-white pr-20"
+                              onChange={(e) => {
+                                if (!referralLocked) {
+                                  setReferralAddress(e.target.value);
+                                }
+                              }}
+                              readOnly={referralLocked}
+                              className={`bg-gray-800 border-gray-700 text-white pr-20 ${
+                                referralLocked ? "cursor-not-allowed" : ""
+                              }`}
                             />
+                            {referralLocked && (
+                              <p className="mt-2 text-xs text-yellow-400">
+                                Referral locked from invite link.
+                              </p>
+                            )}
                             {/* (Referral link generator moved to top-right of card header) */}
                           </div>
                         </>

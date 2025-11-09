@@ -36,6 +36,7 @@ export default function Bond() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [bondAmount, setBondAmount] = useState("");
   const [referralAddress, setReferralAddress] = useState(DEFAULT_REFERRER);
+  const [refFromUrl, setRefFromUrl] = useState<string | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingUserBonds, setLoadingUserBonds] = useState(false);
   const [userBonds, setUserBonds] = useState<
@@ -89,6 +90,7 @@ export default function Bond() {
       const params = new URLSearchParams(window.location.search);
       const ref = params.get("ref");
       if (ref && ref.startsWith("0x")) {
+        setRefFromUrl(ref);
         setReferralAddress(ref);
       }
     } catch (err) {
@@ -112,12 +114,20 @@ export default function Bond() {
   useEffect(() => {
     if (hasRegisteredReferrer) {
       setReferralAddress("");
-    } else {
-      setReferralAddress((prev) =>
-        prev && prev.trim() ? prev : DEFAULT_REFERRER
-      );
+      return;
     }
-  }, [hasRegisteredReferrer]);
+
+    if (refFromUrl) {
+      setReferralAddress(refFromUrl);
+      return;
+    }
+
+    setReferralAddress((prev) =>
+      prev && prev.trim() ? prev : DEFAULT_REFERRER
+    );
+  }, [hasRegisteredReferrer, refFromUrl]);
+
+  const referralLocked = Boolean(refFromUrl && !hasRegisteredReferrer);
 
   const tokenBalanceHuman = useMemo(() => {
     try {
@@ -300,12 +310,20 @@ export default function Bond() {
                             type="text"
                             placeholder="0x..."
                             value={referralAddress}
-                            onChange={(e) => setReferralAddress(e.target.value)}
-                            className="bg-gray-900 border-gray-700 text-white"
+                            onChange={(e) => {
+                              if (!referralLocked) {
+                                setReferralAddress(e.target.value);
+                              }
+                            }}
+                            readOnly={referralLocked}
+                            className={`bg-gray-900 border-gray-700 text-white ${
+                              referralLocked ? "cursor-not-allowed" : ""
+                            }`}
                           />
                           <p className="text-xs text-gray-500 mt-1">
-                            Provide a sponsor wallet to register before your
-                            first bond purchase.
+                            {referralLocked
+                              ? "Referral locked from invite link."
+                              : "Provide a sponsor wallet to register before your first bond purchase."}
                           </p>
                         </div>
                       )}
