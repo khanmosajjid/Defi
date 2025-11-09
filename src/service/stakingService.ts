@@ -665,7 +665,7 @@ export function useStakingContract() {
                     args: [normalized],
                     chainId: supportedChainId,
                 });
-                directCount = Number(extractString((info as unknown[])[6]) ?? '0');
+                directCount = Number(extractString((info as unknown[])[7]) ?? '0');
             } catch {
                 directCount = 0;
             }
@@ -808,9 +808,21 @@ export function useStakingContract() {
                     })
                 );
                 if (cancelled) return;
-                const details = detailResults
-                    .filter((res): res is PromiseFulfilledResult<DirectDetail> => res.status === 'fulfilled')
-                    .map((res) => res.value);
+                const details = addrs.map((addr, idx) => {
+                    const result = detailResults[idx];
+                    if (result && result.status === 'fulfilled') {
+                        return result.value;
+                    }
+                    console.warn('Failed to load direct detail for', addr);
+                    return {
+                        address: addr,
+                        selfStaked: '0',
+                        stakeWithAccrued: '0',
+                        pendingRoi: '0',
+                        level: 0,
+                        referralIncome: incomeByDirect[addr.toLowerCase()] ?? '0',
+                    } satisfies DirectDetail;
+                });
                 setDirectsWithBalances(details);
             } catch (error) {
                 console.error('loadDirects error', error);
