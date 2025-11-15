@@ -63,13 +63,13 @@ function HistoryPanel() {
   }
 
   return (
-    <div className="p-4 bg-gray-800 rounded-lg">
+    <div className="p-4 input-bg rounded-lg">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm text-gray-400">Stake/Unstake history</p>
         <Button
           size="sm"
           variant="outline"
-          className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+          className="card-btn card-btn-sec-bg"
           onClick={load}
           disabled={loading}
         >
@@ -170,14 +170,14 @@ function ROIHistoryPanel() {
   }
 
   return (
-    <div className="p-4 bg-gray-800 rounded-lg">
+    <div className="p-4 input-bg rounded-lg">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm text-gray-400">ROI generated history</p>
         <div className="flex gap-2">
           <Button
             size="sm"
             variant="outline"
-            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            className="card-btn card-btn-sec-bg"
             onClick={() => load(true)}
             disabled={loading}
           >
@@ -190,7 +190,7 @@ function ROIHistoryPanel() {
           <Button
             size="sm"
             variant="outline"
-            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            className="card-btn card-btn-sec-bg"
             onClick={() => load(false)}
             disabled={loading}
           >
@@ -449,6 +449,9 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <div className="bread-shape">
+        <div className="breadcrumb-bg"></div>
+      </div>
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -469,6 +472,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<Wallet className="w-5 h-5" />}
             description="24h change"
+            colorIndex={0} 
+            aosDelay={50} 
           />
           <StatCard
             title="Staked Amount"
@@ -477,6 +482,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Currently earning rewards"
+            colorIndex={1}
+            aosDelay={100} 
           />
           <StatCard
             title="Pending Rewards"
@@ -485,6 +492,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<Gift className="w-5 h-5" />}
             description="Accumulated rewards"
+            colorIndex={2} 
+            aosDelay={150} 
           />
           <StatCard
             title="Bonds"
@@ -493,6 +502,8 @@ export default function Dashboard() {
             changeType="neutral"
             icon={<Coins className="w-5 h-5" />}
             description="Your bond positions"
+            colorIndex={3}
+            aosDelay={200} 
           />
         </div>
 
@@ -504,6 +515,8 @@ export default function Dashboard() {
             changeType="neutral"
             icon={<Users className="w-5 h-5" />}
             description="Total members in your downline"
+            colorIndex={4}
+            aosDelay={250} 
           />
           <StatCard
             title="Direct Income"
@@ -512,6 +525,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<Gift className="w-5 h-5" />}
             description="Aggregate payouts from directs"
+            colorIndex={5} 
+            aosDelay={300} 
           />
           <StatCard
             title="Active Bond Value"
@@ -520,6 +535,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Principal + rewards still vesting"
+            colorIndex={6} 
+            aosDelay={350} 
           />
         </div>
 
@@ -527,25 +544,27 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Portfolio Performance */}
           <div className="lg:col-span-2">
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+             data-aos="zoom-in"
+             data-aos-delay="150">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Portfolio Performance
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="staking" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 bg-gray-800">
-                    <TabsTrigger value="staking">Staking</TabsTrigger>
-                    <TabsTrigger value="profile">Profile</TabsTrigger>
-                    <TabsTrigger value="bonds">Bonds</TabsTrigger>
+                <Tabs defaultValue="staking" className="w-full  ">
+                  <TabsList className="grid mb-5 w-full grid-cols-3  input-bg">
+                    <TabsTrigger value="staking" className="text-light-100 ">Staking</TabsTrigger>
+                    <TabsTrigger value="profile" className="text-light-100">Profile</TabsTrigger>
+                    <TabsTrigger value="bonds" className="text-light-100">Bonds</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="staking" className="space-y-4">
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center p-4 bg-gray-800 rounded-lg">
+                      <div className="flex justify-between items-center p-4  input-bg rounded-lg">
                         <div>
-                          <p className="font-medium">ETN Staking Pool</p>
+                          <p className="font-medium text-white mb-3">ETN Staking Pool</p>
                           <p className="text-sm text-gray-400">
                             APY:{" "}
                             {userRewardPercent && userLevel > 0
@@ -554,7 +573,7 @@ export default function Dashboard() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-medium">
+                          <p className="font-medium text-white mb-3">
                             {userStats.stakedAmount}
                           </p>
                           <p className="text-sm text-green-400">
@@ -567,9 +586,9 @@ export default function Dashboard() {
 
                   <TabsContent value="profile" className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 bg-gray-800 rounded-lg">
-                        <p className="text-sm text-gray-400">Level</p>
-                        <p className="text-lg font-semibold">
+                      <div className="p-4 input-bg rounded-lg">
+                        <p className="text-sm text-gray-300">Level</p>
+                        <p className="text-lg font-semibold text-gray-100">
                           {userLevel && userLevel > 0
                             ? `L${userLevel}`
                             : "None"}
@@ -597,9 +616,9 @@ export default function Dashboard() {
                           </div>
                         )}
                       </div>
-                      <div className="p-4 bg-gray-800 rounded-lg">
-                        <p className="text-sm text-gray-400">Rank</p>
-                        <p className="text-lg font-semibold">
+                      <div className="p-4 input-bg rounded-lg">
+                        <p className="text-sm text-gray-300">Rank</p>
+                        <p className="text-lg font-semibold text-gray-100">
                           {userRank && userRank > 0
                             ? userRankName
                               ? `${userRankName} (R${userRank})`
@@ -638,7 +657,7 @@ export default function Dashboard() {
                         )}
                       </div>
                     </div>
-                    <div className="p-4 bg-gray-800 rounded-lg">
+                    <div className="p-4 input-bg rounded-lg">
                       <p className="text-sm text-gray-400">Referral</p>
                       <div className="mt-1 text-sm text-gray-300">
                         <p>
@@ -779,7 +798,7 @@ export default function Dashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+                            className="card-btn card-btn-sec-bg"
                             onClick={loadTeam}
                             disabled={loadingTeam}
                           >
@@ -862,7 +881,7 @@ export default function Dashboard() {
                         )}
                       </div>
                     </div>
-                    <div className="p-4 bg-gray-800 rounded-lg">
+                    <div className="p-4 input-bg rounded-lg">
                       <p className="text-sm text-gray-400">User report</p>
                       <div className="grid grid-cols-2 gap-3 mt-2 text-sm text-gray-300">
                         <div>
@@ -888,7 +907,7 @@ export default function Dashboard() {
                   <TabsContent value="bonds" className="space-y-4">
                     <div className="space-y-3">
                       {bonds.length === 0 ? (
-                        <div className="p-4 bg-gray-800 rounded-lg text-gray-400">
+                        <div className="p-4 input-bg rounded-lg text-gray-400">
                           No bonds found
                         </div>
                       ) : (
@@ -901,7 +920,7 @@ export default function Dashboard() {
                           return (
                             <div
                               key={b.index}
-                              className="flex justify-between items-center p-4 bg-gray-800 rounded-lg"
+                              className="flex justify-between items-center p-4 input-bg rounded-lg"
                             >
                               <div>
                                 <p className="font-medium">
@@ -938,7 +957,9 @@ export default function Dashboard() {
 
           {/* Recent Transactions */}
           <div>
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+             data-aos="fade-up"
+             data-aos-delay="150">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Recent Transactions
@@ -947,7 +968,7 @@ export default function Dashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {!loadingActivity && activity.length === 0 && (
-                    <div className="p-3 bg-gray-800 rounded text-gray-400">
+                    <div className="p-3 input-bg rounded text-gray-400">
                       No activity yet. Click "Load Activity" to fetch recent
                       events.
                     </div>
@@ -955,7 +976,7 @@ export default function Dashboard() {
                   {activity.map((tx) => (
                     <div
                       key={tx.txHash}
-                      className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
+                      className="flex items-center justify-between p-3 input-bg rounded-lg"
                     >
                       <div className="flex items-center space-x-3">
                         {getTransactionIcon(tx.kind)}
@@ -989,7 +1010,7 @@ export default function Dashboard() {
 
                 <Button
                   variant="outline"
-                  className="w-full mt-4 border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+                  className="w-full mt-4 card-btn card-btn-bg"
                   onClick={loadActivity}
                   disabled={loadingActivity}
                 >
@@ -1003,24 +1024,26 @@ export default function Dashboard() {
             </Card>
 
             {/* Quick Actions */}
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20 mt-6">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20 mt-6"
+             data-aos="fade-up"
+             data-aos-delay="200">
               <CardHeader>
                 <CardTitle className="text-yellow-400">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button className="bg-yellow-500 hover:bg-yellow-600 text-black">
+                  <Button className="card-btn card-btn-bg">
                     Stake ETN
                   </Button>
                   <Button
                     variant="outline"
-                    className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+                    className="card-btn card-btn-sec-bg"
                   >
                     Claim Rewards
                   </Button>
                   <Button
                     variant="outline"
-                    className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+                    className="card-btn card-btn-sec-bg"
                   >
                     Buy Bonds
                   </Button>

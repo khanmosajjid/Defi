@@ -117,50 +117,42 @@ export default function Register() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 via-transparent to-yellow-500/10 blur-3xl" />
-        <div className="relative container mx-auto px-4 py-16 lg:py-24">
-          <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-            <div className="space-y-6">
-              <span className="inline-flex items-center rounded-full bg-yellow-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-yellow-300">
-                Start your ETHAN journey
-              </span>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Register your wallet in a single tap
-              </h1>
-              <p className="max-w-xl text-base sm:text-lg text-gray-300 leading-relaxed">
-                Connect your preferred wallet to secure your spot in the ETHAN
-                ecosystem. We safely remember your address so you can pick up
-                exactly where you left off.
-              </p>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex items-center text-sm text-gray-400">
-                  <ShieldCheck className="mr-2 h-5 w-5 text-yellow-400" />
-                  Non-custodial & privacy-respecting storage.
-                </div>
-              </div>
-            </div>
-
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border border-yellow-500/20 shadow-xl">
+        <div className="absolute inset-0 card-box m-auto from-yellow-500/5 via-transparent to-yellow-500/10 blur-3xl" />
+        <div className="relative container mx-auto px-4 py-16 lg:py-24" data-aos="zoom-in">
+          <div className="card-width">
+            <Card className="register-box from-gray-900 to-gray-800 border border-yellow-500/20 shadow-xl">
               <CardHeader>
-                <CardTitle className="text-2xl text-yellow-400">
-                  Connect Wallet
+                <CardTitle className=" text-yellow-400">
+                   <h2 className="text-2xl text-center sm:text-5xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                Register your wallet <br /> in a single tap
+              </h2>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-center text-gray-400">
+                  Connect your preferred wallet to secure your spot in the ETHAN
+                ecosystem. We safely remember your address so you can pick up
+                exactly where you left off.
+                </p>
+
+                <div className="bg-yellow-transparet border border-yellow-500/20 rounded-2xl p-6 text-center space-y-4">
+                 <div className="card-content mb-8">
+                   <h3 className="font-500 sm:text-5xl mb-4 lg:text-3xl bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">Connect Wallet</h3>
+                   <p className="text-sm text-center text-gray-400">
                   Use the button below to connect your wallet. Once connected,
                   we will store the address securely in your browser so that it
                   persists between visits.
                 </p>
-
-                <div className="bg-black/40 border border-yellow-500/20 rounded-xl p-6 text-center space-y-4">
-                  <ConnectButton
+                 </div>
+                  <div className="flex items-center justify-center m-auto  ">
+                    <ConnectButton
                     label="Connect & Save"
                     chainStatus="icon"
                     showBalance={{ smallScreen: false, largeScreen: false }}
                   />
+                  </div>
                   {activeAddress ? (
-                    <p className="text-sm text-green-400">
+                    <p className="text-sm text-green-400 ">
                       Saved wallet:{" "}
                       <span className="font-mono text-base text-yellow-300">
                         {shortenAddress(activeAddress)}
@@ -191,16 +183,16 @@ export default function Register() {
                   )}
                 </div>
 
-                <Separator className="bg-yellow-500/20" />
+                {/* <Separator className="bg-yellow-500/20" /> */}
 
                 <div className="space-y-3">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-center text-gray-400 mb-5">
                     Once you are connected, you can jump straight into staking
-                    or explore the dashboard for more insights.
+                    or explore the dashboard <br /> for more insights.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Link to="/dashboard" className="flex-1">
-                      <Button className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-semibold">
+                      <Button className="w-full custom-btns btn-bg-yellow hover:bg-yellow-400 text-black font-semibold">
                         Go to Dashboard
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
@@ -208,7 +200,7 @@ export default function Register() {
                     <Link to="/stake" className="flex-1">
                       <Button
                         variant="outline"
-                        className="w-full border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10"
+                        className="w-full custom-btns btn-bg-purple border-yellow-500/40 text-white hover:bg-yellow-500/10"
                       >
                         Start Staking
                       </Button>

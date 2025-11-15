@@ -369,6 +369,9 @@ export default function Stake() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <div className="bread-shape">
+        <div className="breadcrumb-bg"></div>
+      </div>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
@@ -380,7 +383,7 @@ export default function Stake() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
             title="Your Staked Amount"
             value={`${userStakedHuman} ETN`}
@@ -388,6 +391,8 @@ export default function Stake() {
             changeType="positive"
             icon={<Coins className="w-5 h-5" />}
             description="Currently staked"
+            colorIndex={10}
+            aosDelay={50} 
           />
           <StatCard
             title="Current APY"
@@ -400,6 +405,8 @@ export default function Stake() {
             changeType="positive"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Annual percentage yield"
+            colorIndex={11}
+            aosDelay={100} 
           />
           <StatCard
             title="Level"
@@ -408,6 +415,8 @@ export default function Stake() {
             changeType="neutral"
             icon={<Zap className="w-5 h-5" />}
             description="User level based on stake & directs"
+            colorIndex={12}
+            aosDelay={150} 
           />
           <StatCard
             title="Directs"
@@ -416,6 +425,8 @@ export default function Stake() {
             changeType="neutral"
             icon={<Clock className="w-5 h-5" />}
             description="Number of directs"
+            colorIndex={13}
+            aosDelay={200} 
           />
           <StatCard
             title="All Income"
@@ -424,6 +435,8 @@ export default function Stake() {
             changeType="positive"
             icon={<Coins className="w-5 h-5" />}
             description="Lifetime earned"
+            colorIndex={14} 
+            aosDelay={250}
           />
           <StatCard
             title="ROI Income"
@@ -439,6 +452,8 @@ export default function Stake() {
             changeType="positive"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Lifetime ROI"
+            colorIndex={15} 
+            aosDelay={300}
           />
           <StatCard
             title="Level Income"
@@ -454,6 +469,8 @@ export default function Stake() {
             changeType="positive"
             icon={<Zap className="w-5 h-5" />}
             description="Lifetime level income"
+            colorIndex={16} 
+            aosDelay={350}
           />
           <StatCard
             title="Referrer"
@@ -462,13 +479,17 @@ export default function Stake() {
             changeType="neutral"
             icon={<Clock className="w-5 h-5" />}
             description="Your referrer"
+            colorIndex={17} 
+            aosDelay={400}
           />
         </div>
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+            data-aos="zoom-in"
+             data-aos-delay="150">
               <CardHeader className="flex items-center justify-between">
                 <CardTitle className="text-yellow-400">
                   Stake ETN Tokens
@@ -496,9 +517,9 @@ export default function Stake() {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="stake" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 bg-gray-800">
-                    <TabsTrigger value="stake">Stake</TabsTrigger>
-                    <TabsTrigger value="unstake">Unstake</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-2 input-bg">
+                    <TabsTrigger value="stake" className="text-light-100">Stake</TabsTrigger>
+                    <TabsTrigger value="unstake" className="text-light-100">Unstake</TabsTrigger>
                   </TabsList>
 
                   {/* Stake Tab */}
@@ -523,7 +544,7 @@ export default function Stake() {
                           placeholder="0.00"
                           value={stakeAmount}
                           onChange={(e) => setStakeAmount(e.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white"
+                          className="custom-input input-bg border-gray-700 text-white"
                         />
                       </div>
 
@@ -544,7 +565,7 @@ export default function Stake() {
                                 }
                               }}
                               readOnly={referralLocked}
-                              className={`bg-gray-800 border-gray-700 text-white pr-20 ${
+                              className={`custom-input input-bg border-gray-700 text-white pr-20 ${
                                 referralLocked ? "cursor-not-allowed" : ""
                               }`}
                             />
@@ -566,7 +587,7 @@ export default function Stake() {
                       )}
 
                       {stakeAmount && (
-                        <div className="bg-gray-800 p-4 rounded-lg space-y-2">
+                        <div className="input-bg p-4 rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
                             <span>Approx Tokens (ETHAN):</span>
                             <span className="text-green-400">
@@ -583,7 +604,7 @@ export default function Stake() {
                       )}
 
                       <Button
-                        className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                        className="custom-btns btn-bg-yellow hover:bg-yellow-600 text-black font-semibold"
                         disabled={
                           !stakeAmount ||
                           parseFloat(stakeAmount) <= 0 ||
@@ -602,13 +623,13 @@ export default function Stake() {
 
                   {/* Unstake Tab */}
                   <TabsContent value="unstake" className="space-y-6">
-                    <div className="space-y-4">
+                    <div className="space-y-4 mt-4">
                       <Input
                         type="number"
                         placeholder="Amount to Unstake"
                         value={unstakeAmount}
                         onChange={(e) => setUnstakeAmount(e.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white"
+                        className="custom-input input-bg border-gray-700 text-white"
                       />
                       <div className="text-sm text-gray-400">
                         Available to unstake:{" "}
@@ -618,7 +639,7 @@ export default function Stake() {
                       </div>
                       <Button
                         variant="outline"
-                        className="w-full border-red-500/20 text-red-400 hover:bg-red-500/10"
+                        className="custom-btns btn-bg-yellow border-red-500/20 text-red-400 hover:bg-red-500/10"
                         disabled={
                           !unstakeAmount || parseFloat(unstakeAmount) <= 0
                         }
@@ -645,7 +666,9 @@ export default function Stake() {
 
           {/* Rewards */}
           <div className="space-y-6">
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+            data-aos="fade-up"
+             data-aos-delay="150">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Pending Rewards
@@ -664,7 +687,7 @@ export default function Stake() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Button
-                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                    className="flex-1 card-btn card-btn-bg text-black font-semibold"
                     disabled={!hasClaimableRewards || isClaiming}
                     onClick={handleClaimRoi}
                   >
@@ -672,7 +695,7 @@ export default function Stake() {
                   </Button>
                   <Button
                     variant="outline"
-                    className="flex-1 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                    className="flex-1 card-btn card-btn-sec-bg"
                     onClick={async () => {
                       try {
                         await refetchPendingRewards();
@@ -691,7 +714,9 @@ export default function Stake() {
             </Card>
 
             {/* Direct Referral Balances */}
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+            data-aos="fade-up"
+             data-aos-delay="200">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Direct Referral Balances
@@ -744,7 +769,9 @@ export default function Stake() {
             </Card>
 
             {/* Stake & Unstake History */}
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+            data-aos="fade-up"
+             data-aos-delay="250">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Stake &amp; Unstake History
@@ -759,7 +786,9 @@ export default function Stake() {
             </Card>
 
             {/* ROI Generated */}
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+            data-aos="fade-up"
+             data-aos-delay="300">
               <CardHeader>
                 <CardTitle className="text-yellow-400">ROI Generated</CardTitle>
               </CardHeader>
@@ -772,7 +801,9 @@ export default function Stake() {
             </Card>
 
             {/* Income by Level */}
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+            data-aos="fade-up"
+             data-aos-delay="350">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Income by Level
@@ -855,7 +886,7 @@ function StakeActivityList({
         <Button
           size="sm"
           variant="outline"
-          className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+          className="card-btn card-btn-sec-bg"
           onClick={load}
           disabled={loading}
         >
@@ -961,7 +992,7 @@ function ROIList({
           <Button
             size="sm"
             variant="outline"
-            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            className="card-btn card-btn-bg"
             onClick={() => load(true)}
             disabled={loading}
           >
@@ -974,7 +1005,7 @@ function ROIList({
           <Button
             size="sm"
             variant="outline"
-            className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+            className="card-btn card-btn-sec-bg"
             onClick={() => load(false)}
             disabled={loading}
           >
@@ -1030,7 +1061,7 @@ function LevelIncomeList({
         <Button
           size="sm"
           variant="outline"
-          className="border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/10"
+          className="card-btn card-btn-sec-bg"
           onClick={load}
           disabled={loading}
         >

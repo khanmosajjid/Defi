@@ -157,6 +157,9 @@ export default function Bond() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+        <div className="bread-shape">
+        <div className="breadcrumb-bg"></div>
+      </div>
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -178,6 +181,8 @@ export default function Bond() {
             changeType="neutral"
             icon={<Coins className="w-5 h-5" />}
             description="Available to bond"
+            colorIndex={7} 
+            aosDelay={50} 
           />
           <StatCard
             title="Your Bonds"
@@ -186,6 +191,8 @@ export default function Bond() {
             changeType="neutral"
             icon={<Clock className="w-5 h-5" />}
             description="Active and matured"
+            colorIndex={8}
+            aosDelay={100} 
           />
           <StatCard
             title="Plans Available"
@@ -194,6 +201,7 @@ export default function Bond() {
             changeType="neutral"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Configured by protocol"
+            aosDelay={150}
           />
         </div>
 
@@ -201,7 +209,9 @@ export default function Bond() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Available Bonds */}
           <div className="lg:col-span-2">
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+             data-aos="zoom-in"
+             data-aos-delay="150">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Available Bond Plans
@@ -209,7 +219,7 @@ export default function Bond() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {plans.length === 0 && (
-                  <div className="p-4 bg-gray-800 rounded text-gray-400">
+                  <div className="p-4 input-bg rounded text-gray-400">
                     No bond plans found
                   </div>
                 )}
@@ -219,7 +229,7 @@ export default function Bond() {
                     className={`p-4 rounded-lg border transition-all cursor-pointer ${
                       selectedPlanId === p.id
                         ? "border-yellow-500 bg-yellow-500/5"
-                        : "border-gray-700 bg-gray-800 hover:border-gray-600"
+                        : "border-gray-700 input-bg hover:border-gray-600"
                     }`}
                     onClick={() => setSelectedPlanId(p.id)}
                   >
@@ -262,7 +272,7 @@ export default function Bond() {
 
                 {/* Bond Purchase Interface */}
                 {selectedPlan && (
-                  <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-yellow-500/20">
+                  <div className="mt-6 p-4 input-bg rounded-lg border border-yellow-500/20">
                     <h4 className="font-semibold text-yellow-400 mb-4">
                       Purchase Bond
                     </h4>
@@ -385,23 +395,25 @@ export default function Bond() {
 
           {/* Your Bonds */}
           <div>
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+             data-aos="fade-up"
+             data-aos-delay="150">
               <CardHeader>
                 <CardTitle className="text-yellow-400">Your Bonds</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {loadingUserBonds && (
-                  <div className="p-4 bg-gray-800 rounded text-gray-400">
+                  <div className="p-4 input-bg rounded text-gray-400">
                     Loading…
                   </div>
                 )}
                 {!loadingUserBonds && userBonds.length === 0 && (
-                  <div className="p-4 bg-gray-800 rounded text-gray-400">
+                  <div className="p-4 input-bg rounded text-gray-400">
                     No bonds found
                   </div>
                 )}
                 {userBonds.map((bond) => (
-                  <div key={bond.index} className="p-4 bg-gray-800 rounded-lg">
+                  <div key={bond.index} className="p-4 input-bg rounded-lg">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h4 className="font-medium text-white">
@@ -454,7 +466,9 @@ export default function Bond() {
             </Card>
 
             {/* Bond Info */}
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 border-yellow-500/20 mt-6">
+            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20 mt-6"
+             data-aos="fade-up"
+             data-aos-delay="200">
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   How Bonds Work

@@ -1,4 +1,6 @@
 // ETHAN DeFi Constants
+import { Home, BarChart2, Link2, Layers, Pencil } from "lucide-react";
+
 export const COLORS = {
   primary: '#FFD700',
   primaryDark: '#B8860B',
@@ -14,11 +16,11 @@ export const COLORS = {
 } as const;
 
 export const NAVIGATION_ITEMS = [
-  { name: 'HOME', path: '/', icon: '🏠' },
-  { name: 'DASHBOARD', path: '/dashboard', icon: '📊' },
-  { name: 'BOND', path: '/bond', icon: '🔗' },
-  { name: 'STAKE', path: '/stake', icon: '🥩' },
-  { name: 'REGISTER', path: '/register', icon: '📝' },
+  { name: 'HOME', path: '/', icon: Home },
+  { name: 'DASHBOARD', path: '/dashboard', icon: BarChart2 },
+  { name: 'BOND', path: '/bond', icon: Link2 },
+  { name: 'STAKE', path: '/stake', icon: Layers },
+  { name: 'REGISTER', path: '/register', icon: Pencil },
   // removed Reward and Swap per product requirements
   // { name: 'INVITE', path: '/invite', icon: '👥' },
   // { name: 'TURBINE', path: '/turbine', icon: '⚡' },
