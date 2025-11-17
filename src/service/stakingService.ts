@@ -6,7 +6,7 @@ import { parseAbiItem, parseEther } from 'viem';
 import { readContract, getPublicClient } from '@wagmi/core';
 
 import { writeAndWaitForReceipt } from '@/lib/wagmiWrite';
-import { CONTRACT_ADDRESSES, DEFAULT_REFERRER, RANK_NAMES } from '@/lib/constants';
+import { CONTRACT_ADDRESSES, DEFAULT_REFERRER, RANK_NAMES, TEST_USER_ADDRESS } from '@/lib/constants';
 import CONTRACT_ABI from '@/service/stakingABI.json';
 import { config } from '@/lib/wagmiConfig';
 
@@ -94,17 +94,18 @@ type HistoryPage = {
     totalPages: number;
 };
 
-function mapChainId(input: number | undefined): 1 | 10 | 97 | 137 | 42161 | 8453 {
+function mapChainId(input: number | undefined): 1 | 10 | 56 | 97 | 137 | 42161 | 8453 {
     switch (input) {
         case 1:
         case 10:
+        case 56:
         case 97:
         case 137:
         case 42161:
         case 8453:
             return input;
         default:
-            return 97;
+            return 56;
     }
 }
 
@@ -174,6 +175,12 @@ function getRankName(rank: number | null | undefined) {
 export function useStakingContract() {
     const { address } = useAccount();
     const chainId = useChainId();
+    console.log("chain id ----->", chainId);
+
+    const viewingAddress = useMemo(() => {
+        const connected = address as `0x${string}` | undefined;
+        return connected ?? (TEST_USER_ADDRESS as `0x${string}`);
+    }, [address]);
 
     const supportedChainId = useMemo(() => mapChainId(chainId), [chainId]);
 
@@ -213,8 +220,8 @@ export function useStakingContract() {
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
         functionName: 'users',
-        args: [address ?? ZERO_ADDRESS],
-        query: { enabled: Boolean(address) },
+        args: [viewingAddress],
+        query: { enabled: Boolean(viewingAddress) },
     });
 
     const { data: manualTokenPriceRaw } = useReadContract({
@@ -240,24 +247,24 @@ export function useStakingContract() {
         address: TOKEN_ADDRESS,
         abi: ERC20_ABI,
         functionName: 'balanceOf',
-        args: [address ?? ZERO_ADDRESS],
-        query: { enabled: Boolean(address) },
+        args: [viewingAddress],
+        query: { enabled: Boolean(viewingAddress) },
     });
 
     const { data: tokenAllowanceRaw, refetch: refetchTokenAllowance } = useReadContract({
         address: TOKEN_ADDRESS,
         abi: ERC20_ABI,
         functionName: 'allowance',
-        args: [address ?? ZERO_ADDRESS, CONTRACT_ADDRESS],
-        query: { enabled: Boolean(address) },
+        args: [viewingAddress, CONTRACT_ADDRESS],
+        query: { enabled: Boolean(viewingAddress) },
     });
 
     const { data: userReportRaw, refetch: refetchUserReport } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
         functionName: 'getUserReport',
-        args: [address ?? ZERO_ADDRESS],
-        query: { enabled: Boolean(address) },
+        args: [viewingAddress],
+        query: { enabled: Boolean(viewingAddress) },
     });
 
     const userInfo = useMemo(() => {
@@ -531,7 +538,8 @@ export function useStakingContract() {
     }, [supportedChainId]);
 
     const fetchUserBonds = useCallback(async () => {
-        if (!address) return [] as Array<{
+        const targetAddress = viewingAddress;
+        if (!targetAddress) return [] as Array<{
             index: number;
             planId: number;
             principal: string;
@@ -566,7 +574,7 @@ export function useStakingContract() {
                     address: CONTRACT_ADDRESS,
                     abi: CONTRACT_ABI,
                     functionName: 'userBonds',
-                    args: [address as `0x${string}`, BigInt(i)],
+                    args: [targetAddress, BigInt(i)],
                     chainId: supportedChainId,
                 });
                 const [planIdRaw, principalRaw, rewardRaw, startAtRaw, withdrawnRaw] = bond as unknown[];
@@ -611,7 +619,7 @@ export function useStakingContract() {
         }
 
         return bonds;
-    }, [address, supportedChainId, userReport?.bondCount]);
+    }, [supportedChainId, userReport?.bondCount, viewingAddress]);
 
     async function buyBond(planId: number, amount: string, referrerOverride?: string) {
         const txToast = toast.loading('Submitting bond purchase...');
@@ -655,20 +663,21 @@ export function useStakingContract() {
     }
 
     const fetchUserLevelIncome = useCallback(async () => {
-        if (!address) return Array(15).fill('0');
+        const targetAddress = viewingAddress;
+        if (!targetAddress) return Array(15).fill('0');
         const results = await Promise.allSettled(
             Array.from({ length: 15 }, (_, i) =>
                 readContractSafe<unknown>({
                     address: CONTRACT_ADDRESS,
                     abi: CONTRACT_ABI,
                     functionName: 'levelIncome',
-                    args: [address as `0x${string}`, BigInt(i)],
+                    args: [targetAddress, BigInt(i)],
                     chainId: supportedChainId,
                 })
             )
         );
         return results.map((res) => (res.status === 'fulfilled' ? extractString(res.value) ?? '0' : '0'));
-    }, [address, supportedChainId]);
+    }, [supportedChainId, viewingAddress]);
 
     const getMemberDetail = useCallback(async (addr: `0x${string}`): Promise<DirectDetail> => {
         try {
@@ -787,7 +796,8 @@ export function useStakingContract() {
     }, [supportedChainId]);
 
     const fetchTeamSize = useCallback(async () => {
-        if (!address) {
+        const targetAddress = viewingAddress;
+        if (!targetAddress) {
             setTeamSize(0);
             return 0;
         }
@@ -796,9 +806,11 @@ export function useStakingContract() {
                 address: CONTRACT_ADDRESS,
                 abi: CONTRACT_ABI,
                 functionName: 'getTeamSize',
-                args: [address as `0x${string}`],
+                args: [targetAddress],
                 chainId: supportedChainId,
             });
+
+            console.log("result of team size ------>   ", result);
             const size = Number(extractString(result) ?? '0');
             setTeamSize(Number.isNaN(size) ? 0 : size);
             return size;
@@ -807,10 +819,11 @@ export function useStakingContract() {
             setTeamSize(0);
             return 0;
         }
-    }, [address, supportedChainId]);
+    }, [supportedChainId, viewingAddress]);
 
     useEffect(() => {
-        if (!address) {
+        const targetAddress = viewingAddress;
+        if (!targetAddress) {
             setDirectsList([]);
             setDirectsWithBalances([]);
             return;
@@ -830,7 +843,7 @@ export function useStakingContract() {
 
             setLoadingDirects(true);
             try {
-                const addrs = await fetchDirectsForAddress(address as `0x${string}`, directCount);
+                const addrs = await fetchDirectsForAddress(targetAddress, directCount);
                 if (cancelled) return;
                 setDirectsList(addrs);
                 if (addrs.length === 0) {
@@ -843,7 +856,7 @@ export function useStakingContract() {
                         address: CONTRACT_ADDRESS,
                         abi: CONTRACT_ABI,
                         functionName: 'getDirectsWithRewards',
-                        args: [address as `0x${string}`],
+                        args: [targetAddress],
                         chainId: supportedChainId,
                     });
                     if (Array.isArray(result)) {
@@ -887,15 +900,16 @@ export function useStakingContract() {
         return () => {
             cancelled = true;
         };
-    }, [address, fetchDirectsForAddress, fetchMemberDetails, fetchTeamSize, supportedChainId, userInfo?.directs]);
+    }, [fetchDirectsForAddress, fetchMemberDetails, fetchTeamSize, supportedChainId, userInfo?.directs, viewingAddress]);
 
     const fetchDownlinesByLevel = useCallback(
         async (maxDepth?: number): Promise<Record<number, string[]>> => {
-            if (!address) return {};
+            const rootAddress = viewingAddress;
+            if (!rootAddress) return {};
             const unlocked = userLevel > 0 ? userLevel : 1;
             const depth = Math.max(1, Math.min(maxDepth ?? unlocked, 15));
             const levels: Record<number, string[]> = {};
-            const levelOne = await fetchDirectsForAddress(address as `0x${string}`, userInfo?.directs);
+            const levelOne = await fetchDirectsForAddress(rootAddress, userInfo?.directs);
             levels[1] = levelOne;
             let frontier = levelOne;
             for (let current = 2; current <= depth; current++) {
@@ -909,7 +923,7 @@ export function useStakingContract() {
             }
             return levels;
         },
-        [address, fetchDirectsForAddress, userInfo?.directs, userLevel]
+        [fetchDirectsForAddress, userInfo?.directs, userLevel, viewingAddress]
     );
 
     const fetchDownlineDetailsByLevel = useCallback(
@@ -1025,7 +1039,7 @@ export function useStakingContract() {
             options?: { page?: number; pageSize?: number }
         ): Promise<HistoryPage> => {
             const DEFAULT_PAGE_SIZE = 10;
-            if (!address || !publicClient) {
+            if (!viewingAddress || !publicClient) {
                 return buildHistoryPage([], options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
             }
 
@@ -1034,7 +1048,7 @@ export function useStakingContract() {
             const logs = await publicClient.getLogs({
                 address: CONTRACT_ADDRESS,
                 event,
-                args: { user: address as `0x${string}` },
+                args: { user: viewingAddress },
                 fromBlock: 0n,
                 toBlock: latest,
             });
@@ -1042,7 +1056,7 @@ export function useStakingContract() {
             const entries = await mapHistoryEntries(logs);
             return buildHistoryPage(entries, options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
         },
-        [EVT.Staked, EVT.Unstaked, address, buildHistoryPage, mapHistoryEntries, publicClient]
+        [EVT.Staked, EVT.Unstaked, buildHistoryPage, mapHistoryEntries, publicClient, viewingAddress]
     );
 
     const fetchUserActivity = useCallback(
@@ -1053,14 +1067,14 @@ export function useStakingContract() {
             includeToken?: boolean;
             includeApprovals?: boolean;
         }): Promise<ActivityItem[]> => {
-            if (!address || !publicClient) return [];
+            if (!viewingAddress || !publicClient) return [];
 
             const latest = await publicClient.getBlockNumber();
             const maxBack = BigInt(options?.maxBlocksBack ?? 200_000);
             const fromBlock = options?.fromBlock ?? (latest > maxBack ? latest - maxBack : 0n);
             const toBlock = options?.toBlock ?? latest;
 
-            const acct = address as `0x${string}`;
+            const acct = viewingAddress;
             const stakingAddr = CONTRACT_ADDRESS as `0x${string}`;
             const tokenAddr = TOKEN_ADDRESS as `0x${string}`;
 
@@ -1315,7 +1329,7 @@ export function useStakingContract() {
             items.sort((a, b) => (b.blockNumber - a.blockNumber) || a.txHash.localeCompare(b.txHash));
             return items;
         },
-        [address, publicClient, EVT, ERC20_EVT]
+        [publicClient, EVT, ERC20_EVT, viewingAddress]
     );
 
     const fetchStakeHistory = useCallback(
@@ -1333,13 +1347,14 @@ export function useStakingContract() {
     );
 
     const fetchRoiHistory = useCallback(async () => {
-        if (!address) return [] as Array<{ amount: string; timestamp: number }>;
+        const targetAddress = viewingAddress;
+        if (!targetAddress) return [] as Array<{ amount: string; timestamp: number }>;
         try {
             const raw = await readContractSafe<unknown>({
                 address: CONTRACT_ADDRESS,
                 abi: CONTRACT_ABI,
                 functionName: 'getStakeHistory',
-                args: [address as `0x${string}`],
+                args: [targetAddress],
                 chainId: supportedChainId,
             });
             if (!Array.isArray(raw)) return [];
@@ -1363,7 +1378,7 @@ export function useStakingContract() {
             console.error('fetchRoiHistory error', err);
             return [];
         }
-    }, [address, supportedChainId]);
+    }, [supportedChainId, viewingAddress]);
 
     const fetchROIHistoryFull = useCallback(async () => {
         return fetchRoiHistory();
