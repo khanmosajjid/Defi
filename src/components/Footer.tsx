@@ -1,4 +1,4 @@
-import { Github, Twitter, MessageCircle, BookOpen } from 'lucide-react';
+import { Facebook, Instagram, Send, Twitter, Youtube } from 'lucide-react';
 
 export default function Footer() {
   const footerSections = [
@@ -41,10 +41,31 @@ export default function Footer() {
   ];
 
   const socialLinks = [
-    { icon: Twitter, href: '#twitter', label: 'Twitter' },
-    { icon: Github, href: '#github', label: 'GitHub' },
-    { icon: MessageCircle, href: '#discord', label: 'Discord' },
-    { icon: BookOpen, href: '#medium', label: 'Medium' }
+    {
+      icon: Instagram,
+      href: 'https://www.instagram.com/ethanofficial628/',
+      label: 'Instagram',
+    },
+    {
+      icon: Twitter,
+      href: 'https://x.com/Ethan164379?t=winytz7U9aZ13IZXXWFZIA&s=09',
+      label: 'X (Twitter)',
+    },
+    {
+      icon: Facebook,
+      href: 'https://www.facebook.com/profile.php?id=61582330079749',
+      label: 'Facebook',
+    },
+    {
+      icon: Youtube,
+      href: 'https://www.youtube.com/@EthanEthan-w7c',
+      label: 'YouTube',
+    },
+    {
+      icon: Send,
+      href: 'https://t.me/ethanofficial628',
+      label: 'Telegram',
+    },
   ];
 
   return (
@@ -72,6 +93,8 @@ export default function Footer() {
                 <a
                   key={index}
                   href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-10 h-10 bg-gray-800 hover:bg-yellow-500 rounded-lg flex items-center justify-center transition-all duration-200 hover:transform hover:scale-110"
                   aria-label={social.label}
                 >

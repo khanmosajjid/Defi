@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import { NAVIGATION_ITEMS } from "@/lib/constants";
 import { FaFacebookF } from "react-icons/fa";
 import { FaInstagram } from "react-icons/fa";
+import { FaTelegramPlane, FaYoutube } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
-import { FaYoutube } from "react-icons/fa";
 import { IoIosSend } from "react-icons/io";
 import iconBg from "../../assets/img/shape/icons_bg.svg";
 
@@ -33,6 +33,8 @@ export default function Footer() {
             <div className="flex social_links space-x-4 mt-6">
               <a
                 href="https://www.facebook.com/profile.php?id=61582330079749"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-gray-400 hover:text-yellow-400 transition-colors"
               >
                 <div className="shape">
@@ -42,6 +44,8 @@ export default function Footer() {
               </a>
               <a
                 href="https://www.instagram.com/ethanofficial628/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-gray-400 hover:text-yellow-400 transition-colors"
               >
                 <div className="shape">
@@ -51,6 +55,8 @@ export default function Footer() {
               </a>
               <a
                 href="https://x.com/Ethan164379?t=winytz7U9aZ13IZXXWFZIA&s=09"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-gray-400 hover:text-yellow-400 transition-colors"
               >
                 <div className="shape">
@@ -60,12 +66,25 @@ export default function Footer() {
               </a>
               <a
                 href="https://www.youtube.com/@EthanEthan-w7c"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-gray-400 hover:text-yellow-400 transition-colors"
               >
                 <div className="shape">
                   <img src={iconBg} alt="shape" />
                 </div>
                 <FaYoutube className="icon" />
+              </a>
+              <a
+                href="https://t.me/ethanofficial628"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-yellow-400 transition-colors"
+              >
+                <div className="shape">
+                  <img src={iconBg} alt="shape" />
+                </div>
+                <FaTelegramPlane className="icon" />
               </a>
             </div>
           </div>
