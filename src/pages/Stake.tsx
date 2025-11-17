@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { useStakingContract } from "@/service/stakingService";
 import { useAccount, useChainId } from "wagmi";
@@ -35,10 +35,6 @@ export default function Stake() {
     fetchROIHistoryFull,
     fetchLastNROIEvents,
     fetchUserLevelIncome,
-    fetchStakeHistory,
-    fetchUnstakeHistory,
-    directsWithBalances,
-    loadingDirects,
     refetchTokenBalance,
   } = useStakingContract();
 
@@ -66,12 +62,6 @@ export default function Stake() {
     } catch {
       return "0";
     }
-  };
-
-  const shortenDirectAddress = (addr?: string) => {
-    if (!addr) return "-";
-    if (addr.length <= 12) return addr;
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   const parseBigIntSafe = (value: unknown): bigint | null => {
@@ -392,7 +382,7 @@ export default function Stake() {
             icon={<Coins className="w-5 h-5" />}
             description="Currently staked"
             colorIndex={10}
-            aosDelay={50} 
+            aosDelay={50}
           />
           <StatCard
             title="Current APY"
@@ -406,7 +396,7 @@ export default function Stake() {
             icon={<TrendingUp className="w-5 h-5" />}
             description="Annual percentage yield"
             colorIndex={11}
-            aosDelay={100} 
+            aosDelay={100}
           />
           <StatCard
             title="Level"
@@ -416,7 +406,7 @@ export default function Stake() {
             icon={<Zap className="w-5 h-5" />}
             description="User level based on stake & directs"
             colorIndex={12}
-            aosDelay={150} 
+            aosDelay={150}
           />
           <StatCard
             title="Directs"
@@ -426,7 +416,7 @@ export default function Stake() {
             icon={<Clock className="w-5 h-5" />}
             description="Number of directs"
             colorIndex={13}
-            aosDelay={200} 
+            aosDelay={200}
           />
           <StatCard
             title="All Income"
@@ -435,7 +425,7 @@ export default function Stake() {
             changeType="positive"
             icon={<Coins className="w-5 h-5" />}
             description="Lifetime earned"
-            colorIndex={14} 
+            colorIndex={14}
             aosDelay={250}
           />
           <StatCard
@@ -452,7 +442,7 @@ export default function Stake() {
             changeType="positive"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Lifetime ROI"
-            colorIndex={15} 
+            colorIndex={15}
             aosDelay={300}
           />
           <StatCard
@@ -469,7 +459,7 @@ export default function Stake() {
             changeType="positive"
             icon={<Zap className="w-5 h-5" />}
             description="Lifetime level income"
-            colorIndex={16} 
+            colorIndex={16}
             aosDelay={350}
           />
           <StatCard
@@ -479,7 +469,7 @@ export default function Stake() {
             changeType="neutral"
             icon={<Clock className="w-5 h-5" />}
             description="Your referrer"
-            colorIndex={17} 
+            colorIndex={17}
             aosDelay={400}
           />
         </div>
@@ -487,9 +477,11 @@ export default function Stake() {
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-            data-aos="zoom-in"
-             data-aos-delay="150">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="zoom-in"
+              data-aos-delay="150"
+            >
               <CardHeader className="flex items-center justify-between">
                 <CardTitle className="text-yellow-400">
                   Stake ETN Tokens
@@ -518,8 +510,12 @@ export default function Stake() {
               <CardContent>
                 <Tabs defaultValue="stake" className="w-full">
                   <TabsList className="grid w-full grid-cols-2 input-bg">
-                    <TabsTrigger value="stake" className="text-light-100">Stake</TabsTrigger>
-                    <TabsTrigger value="unstake" className="text-light-100">Unstake</TabsTrigger>
+                    <TabsTrigger value="stake" className="text-light-100">
+                      Stake
+                    </TabsTrigger>
+                    <TabsTrigger value="unstake" className="text-light-100">
+                      Unstake
+                    </TabsTrigger>
                   </TabsList>
 
                   {/* Stake Tab */}
@@ -666,9 +662,11 @@ export default function Stake() {
 
           {/* Rewards */}
           <div className="space-y-6">
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-            data-aos="fade-up"
-             data-aos-delay="150">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="fade-up"
+              data-aos-delay="150"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Pending Rewards
@@ -713,82 +711,12 @@ export default function Stake() {
               </CardContent>
             </Card>
 
-            {/* Direct Referral Balances */}
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-            data-aos="fade-up"
-             data-aos-delay="200">
-              <CardHeader>
-                <CardTitle className="text-yellow-400">
-                  Direct Referral Balances
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingDirects ? (
-                  <p className="text-xs text-gray-500">Loading directs…</p>
-                ) : directsWithBalances && directsWithBalances.length > 0 ? (
-                  <div className="space-y-3 max-h-72 overflow-auto pr-1">
-                    {directsWithBalances.map((direct) => (
-                      <div
-                        key={direct.address}
-                        className="flex items-start justify-between bg-gray-900/60 px-3 py-2 rounded"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-white">
-                            {shortenDirectAddress(direct.address)}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {direct.level > 0
-                              ? `Level L${direct.level}`
-                              : "Level —"}
-                          </p>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <p className="text-sm text-yellow-400">
-                            {formatWeiToEtn(direct.selfStaked)} ETN
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Live: {formatWeiToEtn(direct.stakeWithAccrued)} ETN
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Income: {formatWeiToEtn(direct.referralIncome)} ETN
-                          </p>
-                          <p className="text-xs text-green-400">
-                            +{formatWeiToEtn(direct.pendingRoi)} pending
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    No direct referrals yet. Share your referral link to grow
-                    your team.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Stake & Unstake History */}
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-            data-aos="fade-up"
-             data-aos-delay="250">
-              <CardHeader>
-                <CardTitle className="text-yellow-400">
-                  Stake &amp; Unstake History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <StakeActivityList
-                  fetchStakeHistory={fetchStakeHistory}
-                  fetchUnstakeHistory={fetchUnstakeHistory}
-                />
-              </CardContent>
-            </Card>
-
             {/* ROI Generated */}
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-            data-aos="fade-up"
-             data-aos-delay="300">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="fade-up"
+              data-aos-delay="300"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">ROI Generated</CardTitle>
               </CardHeader>
@@ -801,9 +729,11 @@ export default function Stake() {
             </Card>
 
             {/* Income by Level */}
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-            data-aos="fade-up"
-             data-aos-delay="350">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="fade-up"
+              data-aos-delay="350"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Income by Level
@@ -814,133 +744,6 @@ export default function Stake() {
               </CardContent>
             </Card>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StakeActivityList({
-  fetchStakeHistory,
-  fetchUnstakeHistory,
-}: {
-  fetchStakeHistory: () => Promise<
-    Array<{ amount: string; timestamp: number }>
-  >;
-  fetchUnstakeHistory: () => Promise<
-    Array<{ amount: string; timestamp: number }>
-  >;
-}) {
-  const [loading, setLoading] = useState(false);
-  const [stakes, setStakes] = useState<
-    Array<{ amount: string; timestamp: number }>
-  >([]);
-  const [unstakes, setUnstakes] = useState<
-    Array<{ amount: string; timestamp: number }>
-  >([]);
-
-  const formatAmount = (v?: string) => {
-    try {
-      if (!v) return "0";
-      return (Number(BigInt(v) / 10n ** 15n) / 1000).toLocaleString();
-    } catch {
-      return "0";
-    }
-  };
-
-  const formatTime = (ts?: number) => {
-    try {
-      if (!ts) return "-";
-      return new Date(ts * 1000).toLocaleString();
-    } catch {
-      return "-";
-    }
-  };
-
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [stakeItems, unstakeItems] = await Promise.all([
-        fetchStakeHistory(),
-        fetchUnstakeHistory(),
-      ]);
-      setStakes(Array.isArray(stakeItems) ? stakeItems : []);
-      setUnstakes(Array.isArray(unstakeItems) ? unstakeItems : []);
-    } catch (err) {
-      console.error("History load failed", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchStakeHistory, fetchUnstakeHistory]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-400">
-          Track your latest stake and unstake actions.
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="card-btn card-btn-sec-bg"
-          onClick={load}
-          disabled={loading}
-        >
-          {loading
-            ? "Loading…"
-            : stakes.length || unstakes.length
-            ? "Refresh"
-            : "Load"}
-        </Button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <p className="text-xs text-gray-400 mb-1">Stakes</p>
-          {stakes.length === 0 ? (
-            <p className="text-xs text-gray-500">No stakes yet</p>
-          ) : (
-            <ul className="space-y-1">
-              {stakes.map((entry, idx) => (
-                <li
-                  key={`stake-${idx}`}
-                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
-                >
-                  <span className="text-gray-200">
-                    {formatTime(entry.timestamp)}
-                  </span>
-                  <span className="text-yellow-400">
-                    {formatAmount(entry.amount)} ETN
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div>
-          <p className="text-xs text-gray-400 mb-1">Unstakes</p>
-          {unstakes.length === 0 ? (
-            <p className="text-xs text-gray-500">No unstakes yet</p>
-          ) : (
-            <ul className="space-y-1">
-              {unstakes.map((entry, idx) => (
-                <li
-                  key={`unstake-${idx}`}
-                  className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
-                >
-                  <span className="text-gray-200">
-                    {formatTime(entry.timestamp)}
-                  </span>
-                  <span className="text-yellow-400">
-                    {formatAmount(entry.amount)} ETN
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </div>
     </div>

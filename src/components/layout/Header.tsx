@@ -65,19 +65,17 @@ export default function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-1">
             {NAVIGATION_ITEMS.map((item) => (
-              <Link key={item.path} to={item.path}>
-                <a
-                  href="#"
-                  // variant={isActive(item.path) ? "default" : "ghost"}
-                  className={`menu-links font-medium transition-colors mr-2 ${
-                    isActive(item.path)
-                      ? "text-yellow-500 active text-black "
-                      : "text-gray-300 hover:text-yellow-400 "
-                  }`}
-                >
-                  {/* <span className="mr-2">{item.icon}</span> */}
-                  {item.name}
-                </a>
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`menu-links font-medium transition-colors mr-2 ${
+                  isActive(item.path)
+                    ? "text-yellow-500 active"
+                    : "text-gray-300 hover:text-yellow-400"
+                }`}
+              >
+                {/* <span className="mr-2">{item.icon}</span> */}
+                {item.name}
               </Link>
             ))}
           </nav>
@@ -101,23 +99,21 @@ export default function Header() {
           {NAVIGATION_ITEMS.map((item) => {
             const Icon = item.icon;
             return (
-              <li key={item.path} >
+              <li key={item.path}>
                 <Link
                   to={item.path}
                   onClick={() => setIsOpen(false)}
                   className="hover:text-yellow-400 "
                 >
-                  <Icon className={`nav-icon ${
-                      isActive(item.path)
-                        ? "text-yellow-500  text-black "
-                        : ""
-                    }`} />
+                  <Icon
+                    className={`nav-icon ${
+                      isActive(item.path) ? "text-yellow-500" : ""
+                    }`}
+                  />
                   <span
                     // variant={isActive(item.path) ? "default" : "ghost"}
-                    className={` justify-center  mobile-link  ${
-                      isActive(item.path)
-                        ? "text-yellow-500 active text-black "
-                        : "  "
+                    className={`justify-center mobile-link ${
+                      isActive(item.path) ? "text-yellow-500 active" : ""
                     }`}
                   >
                     {item.name}

@@ -1,16 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useStakingContract } from "@/service/stakingService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import StatCard from "@/components/common/StatCard";
 import {
   Wallet,
   TrendingUp,
   Coins,
   Gift,
-  ArrowUpRight,
-  ArrowDownRight,
   Clock,
   CheckCircle,
   XCircle,
@@ -18,15 +23,47 @@ import {
 } from "lucide-react";
 import { STATS } from "@/lib/constants";
 
+type MemberDetail = {
+  address: string;
+  selfStaked: string;
+  stakeWithAccrued: string;
+  pendingRoi: string;
+  level: number;
+  referralIncome?: string;
+  totalReferralIncome?: string;
+  rank?: number;
+};
 function HistoryPanel() {
   const { fetchStakeHistory, fetchUnstakeHistory } = useStakingContract();
-  const [loading, setLoading] = useState(false);
-  const [stakeHist, setStakeHist] = useState<
-    Array<{ amount: string; timestamp: number }>
-  >([]);
-  const [unstakeHist, setUnstakeHist] = useState<
-    Array<{ amount: string; timestamp: number }>
-  >([]);
+  const PAGE_SIZE = 5;
+
+  type PaginatedHistory = {
+    items: Array<{ amount: string; timestamp: number }>;
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+
+  const [stakePage, setStakePage] = useState(1);
+  const [unstakePage, setUnstakePage] = useState(1);
+  const [stakes, setStakes] = useState<PaginatedHistory>({
+    items: [],
+    page: 1,
+    pageSize: PAGE_SIZE,
+    totalItems: 0,
+    totalPages: 1,
+  });
+  const [unstakes, setUnstakes] = useState<PaginatedHistory>({
+    items: [],
+    page: 1,
+    pageSize: PAGE_SIZE,
+    totalItems: 0,
+    totalPages: 1,
+  });
+  const [stakeLoading, setStakeLoading] = useState(false);
+  const [unstakeLoading, setUnstakeLoading] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const formatAmount = (v?: string) => {
     try {
@@ -36,31 +73,135 @@ function HistoryPanel() {
       return "0";
     }
   };
+
   const formatTime = (ts?: number) => {
     try {
       if (!ts) return "-";
-      const d = new Date(ts * 1000);
-      return d.toLocaleString();
+      return new Date(ts * 1000).toLocaleString();
     } catch {
       return "-";
     }
   };
 
-  async function load() {
-    try {
-      setLoading(true);
-      const [sh, uh] = await Promise.all([
-        fetchStakeHistory(),
-        fetchUnstakeHistory(),
-      ]);
-      setStakeHist(Array.isArray(sh) ? sh : []);
-      setUnstakeHist(Array.isArray(uh) ? uh : []);
-    } catch (e) {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStake = async () => {
+      setStakeLoading(true);
+      try {
+        const data = await fetchStakeHistory({
+          page: stakePage,
+          pageSize: PAGE_SIZE,
+        });
+
+        if (!cancelled) {
+          const items = Array.isArray(data?.items) ? data.items : [];
+          const pageSize =
+            typeof data?.pageSize === "number" && data.pageSize > 0
+              ? data.pageSize
+              : PAGE_SIZE;
+          const totalItems =
+            typeof data?.totalItems === "number"
+              ? data.totalItems
+              : items.length;
+          const denominator = pageSize > 0 ? pageSize : 1;
+          const totalPagesRaw =
+            typeof data?.totalPages === "number" && data.totalPages > 0
+              ? data.totalPages
+              : Math.max(1, Math.ceil(totalItems / denominator));
+          const pageRaw =
+            typeof data?.page === "number" && data.page > 0
+              ? data.page
+              : stakePage;
+          const page = Math.min(Math.max(1, pageRaw), totalPagesRaw);
+
+          setStakes({
+            items,
+            page,
+            pageSize,
+            totalItems,
+            totalPages: totalPagesRaw,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Stake history load failed", err);
+          setStakes((prev) => ({ ...prev, items: [] }));
+        }
+      } finally {
+        if (!cancelled) setStakeLoading(false);
+      }
+    };
+
+    void loadStake();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchStakeHistory, stakePage, PAGE_SIZE, refreshNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadUnstake = async () => {
+      setUnstakeLoading(true);
+      try {
+        const data = await fetchUnstakeHistory({
+          page: unstakePage,
+          pageSize: PAGE_SIZE,
+        });
+
+        if (!cancelled) {
+          const items = Array.isArray(data?.items) ? data.items : [];
+          const pageSize =
+            typeof data?.pageSize === "number" && data.pageSize > 0
+              ? data.pageSize
+              : PAGE_SIZE;
+          const totalItems =
+            typeof data?.totalItems === "number"
+              ? data.totalItems
+              : items.length;
+          const denominator = pageSize > 0 ? pageSize : 1;
+          const totalPagesRaw =
+            typeof data?.totalPages === "number" && data.totalPages > 0
+              ? data.totalPages
+              : Math.max(1, Math.ceil(totalItems / denominator));
+          const pageRaw =
+            typeof data?.page === "number" && data.page > 0
+              ? data.page
+              : unstakePage;
+          const page = Math.min(Math.max(1, pageRaw), totalPagesRaw);
+
+          setUnstakes({
+            items,
+            page,
+            pageSize,
+            totalItems,
+            totalPages: totalPagesRaw,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Unstake history load failed", err);
+          setUnstakes((prev) => ({ ...prev, items: [] }));
+        }
+      } finally {
+        if (!cancelled) setUnstakeLoading(false);
+      }
+    };
+
+    void loadUnstake();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchUnstakeHistory, unstakePage, PAGE_SIZE, refreshNonce]);
+
+  const handleRefresh = useCallback(() => {
+    setStakePage(1);
+    setUnstakePage(1);
+    setRefreshNonce((prev) => prev + 1);
+  }, []);
+
+  const combinedLoading = stakeLoading || unstakeLoading;
 
   return (
     <div className="p-4 input-bg rounded-lg">
@@ -70,12 +211,12 @@ function HistoryPanel() {
           size="sm"
           variant="outline"
           className="card-btn card-btn-sec-bg"
-          onClick={load}
-          disabled={loading}
+          onClick={handleRefresh}
+          disabled={combinedLoading}
         >
-          {loading
+          {combinedLoading
             ? "Loading…"
-            : stakeHist.length || unstakeHist.length
+            : stakes.items.length || unstakes.items.length
             ? "Refresh"
             : "Load"}
         </Button>
@@ -83,47 +224,102 @@ function HistoryPanel() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <p className="text-xs text-gray-400 mb-1">Stakes</p>
-          {stakeHist.length === 0 ? (
+          {stakeLoading ? (
+            <p className="text-xs text-gray-500">Loading stakes…</p>
+          ) : stakes.items.length === 0 ? (
             <p className="text-xs text-gray-500">No stakes yet</p>
           ) : (
             <ul className="space-y-1">
-              {stakeHist.map((e, i) => (
+              {stakes.items.map((entry, idx) => (
                 <li
-                  key={`s-${i}`}
+                  key={`dash-stake-${idx}`}
                   className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
                 >
                   <span className="text-gray-200">
-                    {formatTime(e.timestamp)}
+                    {formatTime(entry.timestamp)}
                   </span>
                   <span className="text-yellow-400">
-                    {formatAmount(e.amount)} ETN
+                    {formatAmount(entry.amount)} ETN
                   </span>
                 </li>
               ))}
             </ul>
           )}
+          <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-2"
+              disabled={stakeLoading || stakes.page <= 1}
+              onClick={() => setStakePage((prev) => Math.max(1, prev - 1))}
+            >
+              Prev
+            </Button>
+            <span>
+              Page {stakes.page} of {Math.max(1, stakes.totalPages)}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-2"
+              disabled={
+                stakeLoading || stakes.page >= Math.max(1, stakes.totalPages)
+              }
+              onClick={() => setStakePage((prev) => prev + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
         <div>
           <p className="text-xs text-gray-400 mb-1">Unstakes</p>
-          {unstakeHist.length === 0 ? (
+          {unstakeLoading ? (
+            <p className="text-xs text-gray-500">Loading unstakes…</p>
+          ) : unstakes.items.length === 0 ? (
             <p className="text-xs text-gray-500">No unstakes yet</p>
           ) : (
             <ul className="space-y-1">
-              {unstakeHist.map((e, i) => (
+              {unstakes.items.map((entry, idx) => (
                 <li
-                  key={`u-${i}`}
+                  key={`dash-unstake-${idx}`}
                   className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
                 >
                   <span className="text-gray-200">
-                    {formatTime(e.timestamp)}
+                    {formatTime(entry.timestamp)}
                   </span>
                   <span className="text-yellow-400">
-                    {formatAmount(e.amount)} ETN
+                    {formatAmount(entry.amount)} ETN
                   </span>
                 </li>
               ))}
             </ul>
           )}
+          <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-2"
+              disabled={unstakeLoading || unstakes.page <= 1}
+              onClick={() => setUnstakePage((prev) => Math.max(1, prev - 1))}
+            >
+              Prev
+            </Button>
+            <span>
+              Page {unstakes.page} of {Math.max(1, unstakes.totalPages)}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-2"
+              disabled={
+                unstakeLoading ||
+                unstakes.page >= Math.max(1, unstakes.totalPages)
+              }
+              onClick={() => setUnstakePage((prev) => prev + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -145,6 +341,7 @@ function ROIHistoryPanel() {
       return "0";
     }
   };
+
   const formatTime = (ts?: number) => {
     try {
       if (!ts) return "-";
@@ -154,10 +351,9 @@ function ROIHistoryPanel() {
     }
   };
 
-  async function load(useLastN = true) {
+  const load = async (useLastN = true) => {
     try {
       setLoading(true);
-      // Prefer smaller last-N fetch to keep list tidy; fallback to full history
       const data = useLastN
         ? await fetchLastNROIEvents(50)
         : await fetchROIHistoryFull();
@@ -167,7 +363,7 @@ function ROIHistoryPanel() {
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="p-4 input-bg rounded-lg">
@@ -178,7 +374,7 @@ function ROIHistoryPanel() {
             size="sm"
             variant="outline"
             className="card-btn card-btn-sec-bg"
-            onClick={() => load(true)}
+            onClick={() => void load(true)}
             disabled={loading}
           >
             {loading
@@ -191,7 +387,7 @@ function ROIHistoryPanel() {
             size="sm"
             variant="outline"
             className="card-btn card-btn-sec-bg"
-            onClick={() => load(false)}
+            onClick={() => void load(false)}
             disabled={loading}
           >
             Full
@@ -202,14 +398,16 @@ function ROIHistoryPanel() {
         <p className="text-xs text-gray-500">No ROI entries yet</p>
       ) : (
         <ul className="space-y-1 max-h-72 overflow-auto pr-1">
-          {items.map((e, i) => (
+          {items.map((entry, idx) => (
             <li
-              key={`roi-${i}`}
+              key={`roi-${idx}`}
               className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
             >
-              <span className="text-gray-200">{formatTime(e.timestamp)}</span>
+              <span className="text-gray-200">
+                {formatTime(entry.timestamp)}
+              </span>
               <span className="text-green-400">
-                +{formatAmount(e.amount)} ETN
+                +{formatAmount(entry.amount)} ETN
               </span>
             </li>
           ))}
@@ -241,8 +439,7 @@ export default function Dashboard() {
     loadingDirects,
     teamSize,
     fetchUserLevelIncome,
-    fetchUserActivity,
-    fetchDownlinesByLevel,
+    fetchDownlineDetailsByLevel,
   } = useStakingContract();
 
   // derive user-facing stats from on-chain data
@@ -286,41 +483,6 @@ export default function Dashboard() {
     weekly: "+12.34%",
     monthly: "+28.91%",
   };
-
-  // Activity state
-  const [activity, setActivity] = useState<
-    Array<{
-      kind: string;
-      txHash: string;
-      blockNumber: number;
-      amount?: string;
-      counterparty?: string;
-    }>
-  >([]);
-  const [loadingActivity, setLoadingActivity] = useState(false);
-  async function loadActivity() {
-    try {
-      setLoadingActivity(true);
-      let items = await fetchUserActivity({
-        maxBlocksBack: 500_000,
-        includeToken: true,
-        includeApprovals: true,
-      });
-      if (!items || items.length === 0) {
-        // fallback: scan deeper
-        items = await fetchUserActivity({
-          maxBlocksBack: 1_000_000,
-          includeToken: true,
-          includeApprovals: true,
-        });
-      }
-      setActivity(items);
-    } catch (e) {
-      // ignore
-    } finally {
-      setLoadingActivity(false);
-    }
-  }
 
   // bonds state & helpers
   const [bonds, setBonds] = useState<
@@ -376,6 +538,17 @@ export default function Dashboard() {
     }
   };
 
+  const formatLevelIncomeValue = (levelIndex: number) => {
+    const raw = levelIncome?.[levelIndex] ?? "0";
+    if (!raw || raw === "0") return "0 ETN";
+    try {
+      const human = (Number(BigInt(raw) / 10n ** 15n) / 1000).toLocaleString();
+      return `${human} ETN`;
+    } catch {
+      return "0 ETN";
+    }
+  };
+
   // per-level income
   const [levelIncome, setLevelIncome] = useState<string[]>([]);
   useEffect(() => {
@@ -394,19 +567,38 @@ export default function Dashboard() {
   }, [fetchUserLevelIncome]);
 
   // Team by level state
-  const [teamLevels, setTeamLevels] = useState<Record<number, string[]>>({});
+  const [teamDetailsByLevel, setTeamDetailsByLevel] = useState<
+    Record<number, MemberDetail[]>
+  >({});
+  const [selectedTeamLevel, setSelectedTeamLevel] = useState<number | null>(
+    null
+  );
   const [loadingTeam, setLoadingTeam] = useState(false);
-  async function loadTeam() {
+  const loadTeam = useCallback(async () => {
     try {
       setLoadingTeam(true);
-      const data = await fetchDownlinesByLevel();
-      setTeamLevels(data);
+      const detailed = await fetchDownlineDetailsByLevel();
+      setTeamDetailsByLevel(detailed);
+      const availableLevels = Object.keys(detailed)
+        .map((lvl) => Number(lvl))
+        .filter((lvl) => (detailed[lvl]?.length ?? 0) > 0)
+        .sort((a, b) => a - b);
+      setSelectedTeamLevel((prev) => {
+        if (prev && detailed[prev]?.length) return prev;
+        return availableLevels.length ? availableLevels[0] : null;
+      });
     } catch (e) {
-      // ignore
+      console.error("loadTeam failed", e);
+      setTeamDetailsByLevel({});
+      setSelectedTeamLevel(null);
     } finally {
       setLoadingTeam(false);
     }
-  }
+  }, [fetchDownlineDetailsByLevel]);
+
+  useEffect(() => {
+    void loadTeam();
+  }, [loadTeam]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -418,32 +610,6 @@ export default function Dashboard() {
         return <XCircle className="w-4 h-4 text-red-400" />;
       default:
         return <Clock className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case "STAKE":
-        return <ArrowUpRight className="w-4 h-4 text-blue-400" />;
-      case "UNSTAKE":
-        return <ArrowDownRight className="w-4 h-4 text-red-400" />;
-      case "CLAIM":
-        return <Gift className="w-4 h-4 text-green-400" />;
-      case "BOND_BUY":
-      case "BOND_WITHDRAW":
-        return <Coins className="w-4 h-4 text-yellow-400" />;
-      case "REFERRAL_IN":
-        return <ArrowUpRight className="w-4 h-4 text-green-400" />;
-      case "REFERRAL_OUT":
-        return <ArrowDownRight className="w-4 h-4 text-yellow-400" />;
-      case "TOKEN_TRANSFER_IN":
-        return <ArrowUpRight className="w-4 h-4 text-purple-400" />;
-      case "TOKEN_TRANSFER_OUT":
-        return <ArrowDownRight className="w-4 h-4 text-purple-400" />;
-      case "TOKEN_APPROVAL":
-        return <ArrowUpRight className="w-4 h-4 text-gray-400" />;
-      default:
-        return <ArrowUpRight className="w-4 h-4 text-gray-400" />;
     }
   };
 
@@ -472,8 +638,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<Wallet className="w-5 h-5" />}
             description="24h change"
-            colorIndex={0} 
-            aosDelay={50} 
+            colorIndex={0}
+            aosDelay={50}
           />
           <StatCard
             title="Staked Amount"
@@ -483,7 +649,7 @@ export default function Dashboard() {
             icon={<TrendingUp className="w-5 h-5" />}
             description="Currently earning rewards"
             colorIndex={1}
-            aosDelay={100} 
+            aosDelay={100}
           />
           <StatCard
             title="Pending Rewards"
@@ -492,8 +658,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<Gift className="w-5 h-5" />}
             description="Accumulated rewards"
-            colorIndex={2} 
-            aosDelay={150} 
+            colorIndex={2}
+            aosDelay={150}
           />
           <StatCard
             title="Bonds"
@@ -503,7 +669,7 @@ export default function Dashboard() {
             icon={<Coins className="w-5 h-5" />}
             description="Your bond positions"
             colorIndex={3}
-            aosDelay={200} 
+            aosDelay={200}
           />
         </div>
 
@@ -516,7 +682,7 @@ export default function Dashboard() {
             icon={<Users className="w-5 h-5" />}
             description="Total members in your downline"
             colorIndex={4}
-            aosDelay={250} 
+            aosDelay={250}
           />
           <StatCard
             title="Direct Income"
@@ -525,8 +691,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<Gift className="w-5 h-5" />}
             description="Aggregate payouts from directs"
-            colorIndex={5} 
-            aosDelay={300} 
+            colorIndex={5}
+            aosDelay={300}
           />
           <StatCard
             title="Active Bond Value"
@@ -535,8 +701,8 @@ export default function Dashboard() {
             changeType="positive"
             icon={<TrendingUp className="w-5 h-5" />}
             description="Principal + rewards still vesting"
-            colorIndex={6} 
-            aosDelay={350} 
+            colorIndex={6}
+            aosDelay={350}
           />
         </div>
 
@@ -544,9 +710,11 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Portfolio Performance */}
           <div className="lg:col-span-2">
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-             data-aos="zoom-in"
-             data-aos-delay="150">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="zoom-in"
+              data-aos-delay="150"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Portfolio Performance
@@ -555,16 +723,24 @@ export default function Dashboard() {
               <CardContent>
                 <Tabs defaultValue="staking" className="w-full  ">
                   <TabsList className="grid mb-5 w-full grid-cols-3  input-bg">
-                    <TabsTrigger value="staking" className="text-light-100 ">Staking</TabsTrigger>
-                    <TabsTrigger value="profile" className="text-light-100">Profile</TabsTrigger>
-                    <TabsTrigger value="bonds" className="text-light-100">Bonds</TabsTrigger>
+                    <TabsTrigger value="staking" className="text-light-100 ">
+                      Staking
+                    </TabsTrigger>
+                    <TabsTrigger value="user-report" className="text-light-100">
+                      User Report
+                    </TabsTrigger>
+                    <TabsTrigger value="bonds" className="text-light-100">
+                      Bonds
+                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="staking" className="space-y-4">
                     <div className="space-y-3">
                       <div className="flex justify-between items-center p-4  input-bg rounded-lg">
                         <div>
-                          <p className="font-medium text-white mb-3">ETN Staking Pool</p>
+                          <p className="font-medium text-white mb-3">
+                            ETN Staking Pool
+                          </p>
                           <p className="text-sm text-gray-400">
                             APY:{" "}
                             {userRewardPercent && userLevel > 0
@@ -584,7 +760,7 @@ export default function Dashboard() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="profile" className="space-y-4">
+                  <TabsContent value="user-report" className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-4 input-bg rounded-lg">
                         <p className="text-sm text-gray-300">Level</p>
@@ -726,6 +902,15 @@ export default function Dashboard() {
                                       ETN
                                     </span>
                                   </p>
+                                  <p className="text-xs text-gray-400">
+                                    Total Referral:
+                                    <span className="ml-1 text-blue-300">
+                                      {formatWeiToETN(
+                                        direct.totalReferralIncome ?? "0"
+                                      )}{" "}
+                                      ETN
+                                    </span>
+                                  </p>
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
                                   {direct.level ? (
@@ -793,71 +978,131 @@ export default function Dashboard() {
                       </div>
                       {/* Team by Level */}
                       <div className="mt-3">
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center justify-between mb-1 gap-2">
                           <p className="text-sm text-gray-400">Team by level</p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="card-btn card-btn-sec-bg"
-                            onClick={loadTeam}
-                            disabled={loadingTeam}
-                          >
-                            {loadingTeam
-                              ? "Loading…"
-                              : Object.keys(teamLevels).length
-                              ? "Refresh"
-                              : "Load"}
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={
+                                selectedTeamLevel
+                                  ? String(selectedTeamLevel)
+                                  : undefined
+                              }
+                              onValueChange={(value) =>
+                                setSelectedTeamLevel(Number(value))
+                              }
+                              disabled={
+                                loadingTeam ||
+                                !Object.keys(teamDetailsByLevel).length
+                              }
+                            >
+                              <SelectTrigger className="w-32 bg-gray-900/60 border-gray-700 text-gray-200">
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-gray-900 text-gray-200">
+                                {Object.keys(teamDetailsByLevel)
+                                  .map((lvl) => Number(lvl))
+                                  .sort((a, b) => a - b)
+                                  .map((lvl) => (
+                                    <SelectItem key={lvl} value={String(lvl)}>
+                                      Level {lvl} (
+                                      {teamDetailsByLevel[lvl]?.length ?? 0})
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="card-btn card-btn-sec-bg"
+                              onClick={loadTeam}
+                              disabled={loadingTeam}
+                            >
+                              {loadingTeam
+                                ? "Loading…"
+                                : Object.keys(teamDetailsByLevel).length
+                                ? "Refresh"
+                                : "Load"}
+                            </Button>
+                          </div>
                         </div>
-                        {Object.keys(teamLevels).length ? (
-                          <div className="space-y-2">
-                            {Object.entries(teamLevels).map(([lvl, addrs]) => (
-                              <div
-                                key={lvl}
-                                className="bg-gray-900/60 rounded p-2"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-200">
-                                    Level {lvl}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-gray-400">
-                                      {addrs.length} member
-                                      {addrs.length === 1 ? "" : "s"}
-                                    </span>
-                                    <span className="text-xs text-yellow-400">
-                                      {(() => {
-                                        try {
-                                          const idx = Number(lvl) - 1;
-                                          const v = levelIncome?.[idx] ?? "0";
-                                          if (!v || v === "0") return "0 ETN";
-                                          const human = (
-                                            Number(BigInt(v) / 10n ** 15n) /
-                                            1000
-                                          ).toLocaleString();
-                                          return `${human} ETN`;
-                                        } catch {
-                                          return "0 ETN";
-                                        }
-                                      })()}
-                                    </span>
-                                  </div>
-                                </div>
-                                {addrs.length > 0 && (
-                                  <ul className="mt-1 grid grid-cols-1 gap-1">
-                                    {addrs.map((addr) => (
-                                      <li
-                                        key={addr}
-                                        className="flex items-center justify-between bg-gray-950/50 px-2 py-1 rounded"
-                                      >
-                                        <span className="text-gray-300">
-                                          {addr.slice(0, 6)}...{addr.slice(-4)}
-                                        </span>
+                        {Object.keys(teamDetailsByLevel).length === 0 ? (
+                          <p className="text-gray-500">
+                            Load to see your team across unlocked levels
+                          </p>
+                        ) : selectedTeamLevel ? (
+                          <>
+                            <p className="text-xs text-gray-500">
+                              Level {selectedTeamLevel} income:
+                              <span className="ml-1 text-yellow-400">
+                                {formatLevelIncomeValue(
+                                  Math.max(0, selectedTeamLevel - 1)
+                                )}
+                              </span>
+                            </p>
+                            {(teamDetailsByLevel[selectedTeamLevel]?.length ??
+                              0) > 0 ? (
+                              <ul className="space-y-2 mt-2">
+                                {teamDetailsByLevel[selectedTeamLevel]?.map(
+                                  (member) => (
+                                    <li
+                                      key={member.address}
+                                      className="flex items-start justify-between bg-gray-900/60 px-3 py-2 rounded"
+                                    >
+                                      <div className="flex-1">
+                                        <p className="text-gray-200">
+                                          {member.address.slice(0, 6)}...
+                                          {member.address.slice(-4)}
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-gray-400 sm:grid-cols-3">
+                                          <span>
+                                            Stake:
+                                            <span className="ml-1 text-yellow-400">
+                                              {formatWeiToETN(
+                                                member.selfStaked
+                                              )}{" "}
+                                              ETN
+                                            </span>
+                                          </span>
+                                          <span>
+                                            Pending:
+                                            <span className="ml-1 text-green-400">
+                                              {formatWeiToETN(
+                                                member.pendingRoi
+                                              )}{" "}
+                                              ETN
+                                            </span>
+                                          </span>
+                                          <span>
+                                            Total Referral:
+                                            <span className="ml-1 text-blue-400">
+                                              {formatWeiToETN(
+                                                member.totalReferralIncome
+                                              )}{" "}
+                                              ETN
+                                            </span>
+                                          </span>
+                                          <span>
+                                            Level:
+                                            <span className="ml-1 text-yellow-400">
+                                              L{member.level || 0}
+                                            </span>
+                                          </span>
+                                          <span>
+                                            Rank:
+                                            <span className="ml-1 text-yellow-300">
+                                              {member.rank
+                                                ? `R${member.rank}`
+                                                : "—"}
+                                            </span>
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1">
                                         <button
                                           onClick={async () => {
                                             try {
                                               await navigator.clipboard.writeText(
-                                                addr
+                                                member.address
                                               );
                                             } catch (e) {
                                               /* ignore */
@@ -867,16 +1112,20 @@ export default function Dashboard() {
                                         >
                                           Copy
                                         </button>
-                                      </li>
-                                    ))}
-                                  </ul>
+                                      </div>
+                                    </li>
+                                  )
                                 )}
-                              </div>
-                            ))}
-                          </div>
+                              </ul>
+                            ) : (
+                              <p className="text-gray-500 mt-2">
+                                No members found at this level yet
+                              </p>
+                            )}
+                          </>
                         ) : (
                           <p className="text-gray-500">
-                            Load to see your team across unlocked levels
+                            Select a level to view members
                           </p>
                         )}
                       </div>
@@ -955,86 +1204,19 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Recent Transactions */}
           <div>
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-             data-aos="fade-up"
-             data-aos-delay="150">
-              <CardHeader>
-                <CardTitle className="text-yellow-400">
-                  Recent Transactions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {!loadingActivity && activity.length === 0 && (
-                    <div className="p-3 input-bg rounded text-gray-400">
-                      No activity yet. Click "Load Activity" to fetch recent
-                      events.
-                    </div>
-                  )}
-                  {activity.map((tx) => (
-                    <div
-                      key={tx.txHash}
-                      className="flex items-center justify-between p-3 input-bg rounded-lg"
-                    >
-                      <div className="flex items-center space-x-3">
-                        {getTransactionIcon(tx.kind)}
-                        <div>
-                          <p className="font-medium capitalize">
-                            {tx.kind.replace(/_/g, " ")}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            #{tx.blockNumber}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">
-                          {tx.amount
-                            ? `${
-                                Number(BigInt(tx.amount) / 10n ** 15n) / 1000
-                              } ETN`
-                            : "-"}
-                        </p>
-                        {tx.counterparty && (
-                          <p className="text-xs text-gray-400">
-                            {tx.counterparty.slice(0, 6)}...
-                            {tx.counterparty.slice(-4)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="w-full mt-4 card-btn card-btn-bg"
-                  onClick={loadActivity}
-                  disabled={loadingActivity}
-                >
-                  {loadingActivity
-                    ? "Loading…"
-                    : activity.length
-                    ? "Refresh Activity"
-                    : "Load Activity"}
-                </Button>
-              </CardContent>
-            </Card>
-
             {/* Quick Actions */}
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20 mt-6"
-             data-aos="fade-up"
-             data-aos-delay="200">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20 mt-6"
+              data-aos="fade-up"
+              data-aos-delay="200"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button className="card-btn card-btn-bg">
-                    Stake ETN
-                  </Button>
+                  <Button className="card-btn card-btn-bg">Stake ETN</Button>
                   <Button
                     variant="outline"
                     className="card-btn card-btn-sec-bg"
