@@ -37,6 +37,16 @@ All shadcn/ui components have been downloaded under `@/components/ui`.
 - Import components from `@/components/ui` in your React components
 - Customize the UI by modifying the Tailwind configuration
 
+### BSC RPC configuration
+
+The staking dashboard relies on public Binance Smart Chain RPC endpoints. Some public nodes, like `bsc.publicnode.com`, block browser requests with CORS, which prevents on-chain reads in development. To avoid this:
+
+- Prefer supplying a Thirdweb API key by setting `VITE_THIRDWEB_API_KEY` in `.env`.
+- Or point directly to a CORS-friendly RPC by setting `VITE_BSC_RPC_URL` (and `VITE_BSC_RPC_FALLBACK_URLS` for a comma-separated list). The defaults include Ankr and Binance-hosted RPCs that accept browser traffic, but providing your own endpoint ensures stability.
+- For testnet usage, you can override with `VITE_BSC_TESTNET_RPC_URL` and `VITE_BSC_TESTNET_RPC_FALLBACK_URLS`.
+
+After updating environment variables, restart the dev server so wagmi picks up the new transports.
+
 ## Note
 
 - The `@/` path alias points to the `src/` directory

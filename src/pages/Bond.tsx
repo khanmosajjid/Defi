@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import StatCard from "@/components/common/StatCard";
 import {
   Coins,
@@ -14,7 +13,19 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useStakingContract } from "@/service/stakingService";
-import { DEFAULT_REFERRER } from "@/lib/constants";
+import { DEFAULT_REFERRER, CONTRACT_ADDRESSES } from "@/lib/constants";
+import { toast } from "react-hot-toast";
+import { useTokenSwap } from "@/hooks/useTokenSwap";
+import { formatUnits, parseUnits } from "viem";
+
+const NET_RATE_NUMERATOR = 99n;
+const NET_RATE_DENOMINATOR = 100n;
+
+const trimTrailingZeros = (value: string) => {
+  if (!value.includes(".")) return value;
+  const trimmed = value.replace(/(\.\d*?)0+$/u, "$1").replace(/\.$/u, "");
+  return trimmed.length > 0 ? trimmed : "0";
+};
 
 export default function Bond() {
   const {
@@ -24,7 +35,9 @@ export default function Bond() {
     withdrawBond,
     tokenBalance,
     userInfo,
+    refetchTokenBalance,
   } = useStakingContract();
+  const { getQuote, executeSwap, isLoading: swapLoading } = useTokenSwap();
   const [plans, setPlans] = useState<
     Array<{
       id: number;
@@ -35,24 +48,57 @@ export default function Bond() {
   >([]);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [bondAmount, setBondAmount] = useState("");
-  const [referralAddress, setReferralAddress] = useState(DEFAULT_REFERRER);
+  const [usdtAmount, setUsdtAmount] = useState("");
+  const [quotedETN, setQuotedETN] = useState("0");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [referralAddress, setReferralAddress] =
+    useState<string>(DEFAULT_REFERRER);
   const [refFromUrl, setRefFromUrl] = useState<string | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingUserBonds, setLoadingUserBonds] = useState(false);
-  const [userBonds, setUserBonds] = useState<
-    Array<{
-      index: number;
-      planId: number;
-      amount: string;
-      amountHuman: string;
-      startAt: number;
-      endAt: number;
-      withdrawn: boolean;
-      duration: string;
-      rewardPercent: number;
-      status: "Active" | "Matured" | "Withdrawn";
-    }>
-  >([]);
+  type UserBond = {
+    index: number;
+    planId: number;
+    principal: string;
+    reward: string;
+    total: string;
+    totalHuman: string;
+    startAt: number;
+    endAt: number;
+    withdrawn: boolean;
+    rewardPercent: number;
+    status: "Active" | "Matured" | "Withdrawn";
+  };
+  const [userBonds, setUserBonds] = useState<UserBond[]>([]);
+
+  const tokens = {
+    USDT: "0x55d398326f99059fF775485246999027B3197955", // BSC mainnet USDT
+    ETHAN: CONTRACT_ADDRESSES.token,
+  } as const;
+
+  const parseBigIntSafe = (value: unknown): bigint | null => {
+    try {
+      if (typeof value === "bigint") return value;
+      if (typeof value === "number") return BigInt(Math.floor(value));
+      if (typeof value === "string") return BigInt(value);
+      if (value && typeof value === "object" && "toString" in value) {
+        const str = (value as { toString: () => string }).toString();
+        if (str) return BigInt(str);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+
+  const formatTokenAmount = (value?: string) => {
+    try {
+      if (!value) return "0";
+      return trimTrailingZeros(formatUnits(BigInt(value), 18));
+    } catch {
+      return "0";
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -138,26 +184,165 @@ export default function Bond() {
     }
   }, [tokenBalance]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const fetchQuote = async () => {
+      if (!usdtAmount || parseFloat(usdtAmount) <= 0) {
+        if (!cancelled) setQuotedETN("0");
+        return;
+      }
+      try {
+        const quote = await getQuote(usdtAmount, tokens.USDT, tokens.ETHAN);
+        if (!cancelled) setQuotedETN(quote);
+      } catch (err) {
+        console.error("Bond quote fetch failed", err);
+        if (!cancelled) setQuotedETN("0");
+      }
+    };
+
+    void fetchQuote();
+    return () => {
+      cancelled = true;
+    };
+  }, [getQuote, tokens.ETHAN, tokens.USDT, usdtAmount]);
+
+  useEffect(() => {
+    const numericQuote = parseFloat(quotedETN || "0");
+    if (!quotedETN || Number.isNaN(numericQuote) || numericQuote <= 0) {
+      setBondAmount("0");
+      return;
+    }
+    try {
+      const quotedWei = parseUnits(quotedETN, 18);
+      if (quotedWei <= 0n) {
+        setBondAmount("0");
+        return;
+      }
+      const netWei = (quotedWei * NET_RATE_NUMERATOR) / NET_RATE_DENOMINATOR;
+      setBondAmount(
+        netWei > 0n ? trimTrailingZeros(formatUnits(netWei, 18)) : "0"
+      );
+    } catch (error) {
+      setBondAmount("0");
+    }
+  }, [quotedETN]);
+
   const selectedPlan = useMemo(
     () => plans.find((p) => p.id === selectedPlanId) || null,
     [plans, selectedPlanId]
   );
 
   async function handleBuy() {
-    if (!selectedPlan || !bondAmount || Number(bondAmount) <= 0) return;
-    const overrideRef = hasRegisteredReferrer
-      ? undefined
-      : referralAddress && referralAddress.startsWith("0x")
-      ? referralAddress
-      : DEFAULT_REFERRER;
-    await buyBond(selectedPlan.id, bondAmount, overrideRef);
-    setBondAmount("");
-    await reloadUserBonds();
+    if (isProcessing) return;
+    if (!selectedPlan) {
+      toast.error("Select a bond plan to continue");
+      return;
+    }
+
+    let quotedWei: bigint;
+    try {
+      quotedWei = parseUnits(quotedETN || "0", 18);
+    } catch (error) {
+      console.error("Failed to parse quoted amount", error);
+      toast.error("Unable to determine swap quote");
+      return;
+    }
+
+    if (quotedWei <= 0n) {
+      toast.error("Enter a valid USDT amount");
+      return;
+    }
+
+    // apply 1% deduction to the quoted ETN before bonding
+    const netWei = (quotedWei * NET_RATE_NUMERATOR) / NET_RATE_DENOMINATOR;
+    if (netWei <= 0n) {
+      toast.error("Amount too low after 1% deduction");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const overrideRef = hasRegisteredReferrer
+        ? undefined
+        : referralAddress && referralAddress.startsWith("0x")
+        ? referralAddress
+        : DEFAULT_REFERRER;
+
+      let walletBalanceWei = parseBigIntSafe(tokenBalance) ?? 0n;
+
+      if (walletBalanceWei < netWei) {
+        if (!usdtAmount || parseFloat(usdtAmount) <= 0) {
+          toast.error("Enter the USDT amount you want to bond");
+          return;
+        }
+
+        const minOut = trimTrailingZeros(formatUnits(netWei, 18));
+        const swapToast = toast.loading(
+          `Swapping ${usdtAmount} USDT for ETN...`
+        );
+
+        const txHash = await executeSwap(
+          usdtAmount,
+          minOut,
+          tokens.USDT,
+          tokens.ETHAN,
+          1
+        );
+
+        toast.dismiss(swapToast);
+
+        if (!txHash) {
+          return;
+        }
+
+        if (typeof refetchTokenBalance === "function") {
+          try {
+            const refreshed = await refetchTokenBalance();
+            const refreshedValue = (refreshed as { data?: unknown })?.data;
+            const parsed = parseBigIntSafe(refreshedValue);
+            if (parsed !== null) {
+              walletBalanceWei = parsed;
+            }
+          } catch (balanceError) {
+            console.error("Failed to refresh ETN balance", balanceError);
+          }
+        } else {
+          walletBalanceWei = parseBigIntSafe(tokenBalance) ?? 0n;
+        }
+      }
+
+      if (walletBalanceWei <= 0n) {
+        toast.error("No ETN balance available to bond");
+        return;
+      }
+
+      const bondWei = walletBalanceWei >= netWei ? netWei : walletBalanceWei;
+      if (bondWei <= 0n) {
+        toast.error("Bond amount too low");
+        return;
+      }
+
+      const bondDecimal = trimTrailingZeros(formatUnits(bondWei, 18));
+      setBondAmount(bondDecimal);
+
+      await buyBond(selectedPlan.id, bondDecimal, overrideRef);
+      setUsdtAmount("");
+      setQuotedETN("0");
+      await reloadUserBonds();
+      if (typeof refetchTokenBalance === "function") {
+        void refetchTokenBalance();
+      }
+    } catch (error) {
+      console.error("Bond purchase failed", error);
+      toast.error("Bond purchase failed");
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   return (
     <div className="min-h-screen bg-black text-white">
-        <div className="bread-shape">
+      <div className="bread-shape">
         <div className="breadcrumb-bg"></div>
       </div>
       <div className="container mx-auto px-4 py-8">
@@ -181,8 +366,8 @@ export default function Bond() {
             changeType="neutral"
             icon={<Coins className="w-5 h-5" />}
             description="Available to bond"
-            colorIndex={7} 
-            aosDelay={50} 
+            colorIndex={7}
+            aosDelay={50}
           />
           <StatCard
             title="Your Bonds"
@@ -192,7 +377,7 @@ export default function Bond() {
             icon={<Clock className="w-5 h-5" />}
             description="Active and matured"
             colorIndex={8}
-            aosDelay={100} 
+            aosDelay={100}
           />
           <StatCard
             title="Plans Available"
@@ -209,9 +394,11 @@ export default function Bond() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Available Bonds */}
           <div className="lg:col-span-2">
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-             data-aos="zoom-in"
-             data-aos-delay="150">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="zoom-in"
+              data-aos-delay="150"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   Available Bond Plans
@@ -278,31 +465,57 @@ export default function Bond() {
                     </h4>
 
                     <div className="space-y-4">
-                      <div>
-                        <label className="text-sm text-gray-400 mb-2 block">
-                          Amount (ETN)
-                        </label>
-                        <Input
-                          type="number"
-                          placeholder="0.00"
-                          value={bondAmount}
-                          onChange={(e) => setBondAmount(e.target.value)}
-                          className="bg-gray-900 border-gray-700 text-white"
-                        />
-                        <div className="flex justify-between text-sm text-gray-400 mt-2">
-                          <span>Balance: {tokenBalanceHuman} ETN</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-yellow-400 hover:text-yellow-300 p-0 h-auto"
-                            onClick={() =>
-                              setBondAmount(tokenBalanceHuman.replace(/,/g, ""))
-                            }
-                          >
-                            MAX
-                          </Button>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="text-sm text-gray-400 mb-2 block">
+                            Amount (USDT)
+                          </label>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={usdtAmount}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                                setUsdtAmount(value);
+                              }
+                            }}
+                            className="bg-gray-900 border-gray-700 text-white"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Enter the USDT amount to convert into ETN for this
+                            bond.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="text-sm text-gray-400 mb-2 block">
+                            Estimated ETN (after 1% deduction)
+                          </label>
+                          <Input
+                            type="text"
+                            value={bondAmount || "0"}
+                            readOnly
+                            className="bg-gray-900 border-gray-700 text-white cursor-not-allowed"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Auto-updated from the current swap quote (1%
+                            deduction applied).
+                          </p>
                         </div>
                       </div>
+                      <div className="text-sm text-gray-400">
+                        Wallet ETN balance:{" "}
+                        <span className="text-yellow-400">
+                          {tokenBalanceHuman} ETN
+                        </span>
+                      </div>
+                      {parseFloat(quotedETN || "0") > 0 && (
+                        <div className="text-xs text-gray-500">
+                          Quote before deduction: {trimTrailingZeros(quotedETN)}{" "}
+                          ETN
+                        </div>
+                      )}
 
                       {hasRegisteredReferrer ? (
                         <div className="text-sm text-gray-400">
@@ -338,8 +551,38 @@ export default function Bond() {
                         </div>
                       )}
 
-                      {bondAmount && selectedPlan && (
+                      {parseFloat(bondAmount || "0") > 0 && selectedPlan && (
                         <div className="bg-gray-900 p-4 rounded-lg space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">USDT input:</span>
+                            <span className="text-white">
+                              {(() => {
+                                const val = parseFloat(usdtAmount || "0");
+                                return Number.isNaN(val)
+                                  ? "0"
+                                  : val.toLocaleString(undefined, {
+                                      maximumFractionDigits: 2,
+                                    });
+                              })()}{" "}
+                              USDT
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">
+                              Bond principal:
+                            </span>
+                            <span className="text-white">
+                              {(() => {
+                                const amt = parseFloat(bondAmount || "0");
+                                return Number.isNaN(amt)
+                                  ? "0"
+                                  : amt.toLocaleString(undefined, {
+                                      maximumFractionDigits: 6,
+                                    });
+                              })()}{" "}
+                              ETN
+                            </span>
+                          </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-400">
                               You will receive:
@@ -353,7 +596,9 @@ export default function Bond() {
                                     ((selectedPlan?.rewardPercent || 0) / 100);
                                 return isNaN(total)
                                   ? "0"
-                                  : total.toLocaleString();
+                                  : total.toLocaleString(undefined, {
+                                      maximumFractionDigits: 6,
+                                    });
                               })()}{" "}
                               ETN
                             </span>
@@ -380,11 +625,22 @@ export default function Bond() {
 
                       <Button
                         className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
-                        disabled={!bondAmount || parseFloat(bondAmount) <= 0}
+                        disabled={
+                          isProcessing ||
+                          swapLoading ||
+                          parseFloat(usdtAmount || "0") <= 0 ||
+                          parseFloat(bondAmount || "0") <= 0
+                        }
                         onClick={handleBuy}
                       >
-                        Purchase Bond
-                        <ArrowRight className="w-4 h-4 ml-2" />
+                        {isProcessing || swapLoading ? (
+                          "Processing..."
+                        ) : (
+                          <span className="flex items-center justify-center">
+                            Purchase Bond
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </span>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -395,9 +651,11 @@ export default function Bond() {
 
           {/* Your Bonds */}
           <div>
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
-             data-aos="fade-up"
-             data-aos-delay="150">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20"
+              data-aos="fade-up"
+              data-aos-delay="150"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">Your Bonds</CardTitle>
               </CardHeader>
@@ -420,7 +678,7 @@ export default function Bond() {
                           Plan #{bond.planId}
                         </h4>
                         <p className="text-sm text-gray-400">
-                          Amount: {bond.amountHuman} ETN
+                          Total: {bond.totalHuman} ETN
                         </p>
                       </div>
                       {bond.status === "Matured" && (
@@ -429,6 +687,18 @@ export default function Bond() {
                     </div>
 
                     <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Principal:</span>
+                        <span className="text-white">
+                          {formatTokenAmount(bond.principal)} ETN
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Reward:</span>
+                        <span className="text-green-400">
+                          {formatTokenAmount(bond.reward)} ETN
+                        </span>
+                      </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Status:</span>
                         <span className="text-white">{bond.status}</span>
@@ -466,9 +736,11 @@ export default function Bond() {
             </Card>
 
             {/* Bond Info */}
-            <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20 mt-6"
-             data-aos="fade-up"
-             data-aos-delay="200">
+            <Card
+              className="card-box from-gray-900 to-gray-800 border-yellow-500/20 mt-6"
+              data-aos="fade-up"
+              data-aos-delay="200"
+            >
               <CardHeader>
                 <CardTitle className="text-yellow-400">
                   How Bonds Work

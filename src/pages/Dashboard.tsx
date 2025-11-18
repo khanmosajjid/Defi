@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import { useStakingContract } from "@/service/stakingService";
+import type { LevelIncomeEvent } from "@/service/stakingService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,23 +50,24 @@ function HistoryPanel() {
 
   const [stakePage, setStakePage] = useState(1);
   const [unstakePage, setUnstakePage] = useState(1);
-  const [stakes, setStakes] = useState<PaginatedHistory>({
+  const [stakes, setStakes] = useState<PaginatedHistory>(() => ({
     items: [],
     page: 1,
     pageSize: PAGE_SIZE,
     totalItems: 0,
     totalPages: 1,
-  });
-  const [unstakes, setUnstakes] = useState<PaginatedHistory>({
+  }));
+  const [unstakes, setUnstakes] = useState<PaginatedHistory>(() => ({
     items: [],
     page: 1,
     pageSize: PAGE_SIZE,
     totalItems: 0,
     totalPages: 1,
-  });
+  }));
   const [stakeLoading, setStakeLoading] = useState(false);
   const [unstakeLoading, setUnstakeLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [historyEnabled, setHistoryEnabled] = useState(false);
 
   const formatAmount = (v?: string) => {
     try {
@@ -84,6 +88,8 @@ function HistoryPanel() {
   };
 
   useEffect(() => {
+    if (!historyEnabled) return;
+
     let cancelled = false;
 
     const loadStake = async () => {
@@ -137,9 +143,11 @@ function HistoryPanel() {
     return () => {
       cancelled = true;
     };
-  }, [fetchStakeHistory, stakePage, PAGE_SIZE, refreshNonce]);
+  }, [fetchStakeHistory, stakePage, PAGE_SIZE, refreshNonce, historyEnabled]);
 
   useEffect(() => {
+    if (!historyEnabled) return;
+
     let cancelled = false;
 
     const loadUnstake = async () => {
@@ -193,15 +201,22 @@ function HistoryPanel() {
     return () => {
       cancelled = true;
     };
-  }, [fetchUnstakeHistory, unstakePage, PAGE_SIZE, refreshNonce]);
+  }, [
+    fetchUnstakeHistory,
+    unstakePage,
+    PAGE_SIZE,
+    refreshNonce,
+    historyEnabled,
+  ]);
 
   const handleRefresh = useCallback(() => {
     setStakePage(1);
     setUnstakePage(1);
+    setHistoryEnabled(true);
     setRefreshNonce((prev) => prev + 1);
   }, []);
 
-  const combinedLoading = stakeLoading || unstakeLoading;
+  const combinedLoading = historyEnabled && (stakeLoading || unstakeLoading);
 
   return (
     <div className="p-4 input-bg rounded-lg">
@@ -216,7 +231,7 @@ function HistoryPanel() {
         >
           {combinedLoading
             ? "Loading…"
-            : stakes.items.length || unstakes.items.length
+            : historyEnabled && (stakes.items.length || unstakes.items.length)
             ? "Refresh"
             : "Load"}
         </Button>
@@ -224,7 +239,11 @@ function HistoryPanel() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <p className="text-xs text-gray-400 mb-1">Stakes</p>
-          {stakeLoading ? (
+          {!historyEnabled ? (
+            <p className="text-xs text-gray-500">
+              History not loaded. Click Load to fetch recent stakes.
+            </p>
+          ) : stakeLoading ? (
             <p className="text-xs text-gray-500">Loading stakes…</p>
           ) : stakes.items.length === 0 ? (
             <p className="text-xs text-gray-500">No stakes yet</p>
@@ -250,7 +269,7 @@ function HistoryPanel() {
               variant="ghost"
               size="sm"
               className="px-2"
-              disabled={stakeLoading || stakes.page <= 1}
+              disabled={!historyEnabled || stakeLoading || stakes.page <= 1}
               onClick={() => setStakePage((prev) => Math.max(1, prev - 1))}
             >
               Prev
@@ -263,7 +282,9 @@ function HistoryPanel() {
               size="sm"
               className="px-2"
               disabled={
-                stakeLoading || stakes.page >= Math.max(1, stakes.totalPages)
+                !historyEnabled ||
+                stakeLoading ||
+                stakes.page >= Math.max(1, stakes.totalPages)
               }
               onClick={() => setStakePage((prev) => prev + 1)}
             >
@@ -273,7 +294,11 @@ function HistoryPanel() {
         </div>
         <div>
           <p className="text-xs text-gray-400 mb-1">Unstakes</p>
-          {unstakeLoading ? (
+          {!historyEnabled ? (
+            <p className="text-xs text-gray-500">
+              History not loaded. Click Load to fetch recent unstakes.
+            </p>
+          ) : unstakeLoading ? (
             <p className="text-xs text-gray-500">Loading unstakes…</p>
           ) : unstakes.items.length === 0 ? (
             <p className="text-xs text-gray-500">No unstakes yet</p>
@@ -299,7 +324,7 @@ function HistoryPanel() {
               variant="ghost"
               size="sm"
               className="px-2"
-              disabled={unstakeLoading || unstakes.page <= 1}
+              disabled={!historyEnabled || unstakeLoading || unstakes.page <= 1}
               onClick={() => setUnstakePage((prev) => Math.max(1, prev - 1))}
             >
               Prev
@@ -312,6 +337,7 @@ function HistoryPanel() {
               size="sm"
               className="px-2"
               disabled={
+                !historyEnabled ||
                 unstakeLoading ||
                 unstakes.page >= Math.max(1, unstakes.totalPages)
               }
@@ -418,12 +444,16 @@ function ROIHistoryPanel() {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [isConnected, setIsConnected] = useState(false);
+  const [claimLoading, setClaimLoading] = useState(false);
   const {
     totalStaked,
     tokenBalance,
     userInfo,
+    pendingRewards,
     pendingRewardsHuman,
+    pendingComputed,
     pendingComputedHuman,
     manualTokenPrice,
     userLevel,
@@ -439,7 +469,11 @@ export default function Dashboard() {
     loadingDirects,
     teamSize,
     fetchUserLevelIncome,
+    fetchLevelIncomeEvents,
     fetchDownlineDetailsByLevel,
+    claimRoi,
+    refetchPendingRewards,
+    refetchUserInfo,
   } = useStakingContract();
 
   // derive user-facing stats from on-chain data
@@ -483,6 +517,41 @@ export default function Dashboard() {
     weekly: "+12.34%",
     monthly: "+28.91%",
   };
+
+  const hasClaimableRewards = useMemo(() => {
+    try {
+      const primary = pendingRewards && pendingRewards !== "0"
+        ? pendingRewards
+        : pendingComputed;
+      if (!primary) return false;
+      return BigInt(primary) > 0n;
+    } catch {
+      return false;
+    }
+  }, [pendingRewards, pendingComputed]);
+
+  const handleClaimRewards = useCallback(async () => {
+    if (claimLoading || !hasClaimableRewards) return;
+
+    setClaimLoading(true);
+    const toastId = toast.loading("Claiming rewards…");
+    try {
+      await claimRoi();
+      await Promise.allSettled(
+        [refetchPendingRewards, refetchUserInfo, refetchTotalStaked]
+          .filter(
+            (fn): fn is () => Promise<unknown> => typeof fn === "function"
+          )
+          .map((fn) => fn())
+      );
+      toast.success("Rewards claimed", { id: toastId });
+    } catch (error) {
+      console.error("Claim rewards failed", error);
+      toast.error("Claim failed", { id: toastId });
+    } finally {
+      setClaimLoading(false);
+    }
+  }, [claimLoading, hasClaimableRewards, claimRoi, refetchPendingRewards, refetchUserInfo, refetchTotalStaked]);
 
   // bonds state & helpers
   const [bonds, setBonds] = useState<
@@ -552,7 +621,7 @@ export default function Dashboard() {
   // per-level income
   const [levelIncome, setLevelIncome] = useState<string[]>([]);
   useEffect(() => {
-    const mounted = true;
+    let mounted = true;
     (async () => {
       try {
         const arr = await fetchUserLevelIncome();
@@ -562,9 +631,141 @@ export default function Dashboard() {
       }
     })();
     return () => {
-      // no-op cleanup
+      mounted = false;
     };
   }, [fetchUserLevelIncome]);
+
+  const levelIncomeDisplay = useMemo(() => {
+    const unlocked = userLevel && userLevel > 0 ? userLevel : 0;
+    const baseLength = levelIncome?.length ?? 0;
+    const safeLength = unlocked > 0 ? unlocked : baseLength;
+    return Array.from(
+      { length: safeLength },
+      (_, idx) => levelIncome?.[idx] ?? "0"
+    );
+  }, [levelIncome, userLevel]);
+
+  const [levelIncomeEvents, setLevelIncomeEvents] = useState<
+    LevelIncomeEvent[]
+  >([]);
+  const [levelIncomeEventsLoading, setLevelIncomeEventsLoading] =
+    useState(false);
+
+  const loadLevelIncomeEvents = useCallback(async () => {
+    try {
+      setLevelIncomeEventsLoading(true);
+      const events = await fetchLevelIncomeEvents();
+      setLevelIncomeEvents(Array.isArray(events) ? events : []);
+    } catch (error) {
+      console.error("loadLevelIncomeEvents failed", error);
+      setLevelIncomeEvents([]);
+    } finally {
+      setLevelIncomeEventsLoading(false);
+    }
+  }, [fetchLevelIncomeEvents]);
+
+  useEffect(() => {
+    void loadLevelIncomeEvents();
+  }, [loadLevelIncomeEvents]);
+
+  const parseAmountToBigInt = useCallback((value?: string) => {
+    if (!value) return 0n;
+    try {
+      return BigInt(value);
+    } catch {
+      return 0n;
+    }
+  }, []);
+
+  const shortAddress = useCallback((addr?: string | null) => {
+    if (!addr) return "Unknown";
+    const lower = addr.toLowerCase();
+    if (lower === "0x0000000000000000000000000000000000000000") {
+      return "System";
+    }
+    return addr.length <= 12 ? addr : `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  }, []);
+
+  const formatEventTime = useCallback((ts?: number) => {
+    if (!ts) return "-";
+    try {
+      return new Date(ts * 1000).toLocaleString();
+    } catch {
+      return "-";
+    }
+  }, []);
+
+  const levelIncomeDaily = useMemo(() => {
+    if (!levelIncomeEvents.length)
+      return [] as Array<{
+        key: string;
+        displayDate: string;
+        totals: Array<{ level: number; amountWei: bigint; count: number }>;
+        totalAmountWei: bigint;
+        events: LevelIncomeEvent[];
+      }>;
+
+    const buckets = new Map<
+      string,
+      {
+        date: Date;
+        totals: Map<number, { amount: bigint; count: number }>;
+        total: bigint;
+        events: LevelIncomeEvent[];
+      }
+    >();
+
+    levelIncomeEvents.forEach((evt) => {
+      if (!evt.timestamp) return;
+      const dateObj = new Date(evt.timestamp * 1000);
+      const key = `${dateObj.getFullYear()}-${String(
+        dateObj.getMonth() + 1
+      ).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = {
+          date: dateObj,
+          totals: new Map(),
+          total: 0n,
+          events: [],
+        };
+        buckets.set(key, bucket);
+      }
+      const amount = parseAmountToBigInt(evt.amount);
+      bucket.total += amount;
+      bucket.events.push(evt);
+      const levelKey = (evt.levelIndex ?? 0) + 1;
+      const current = bucket.totals.get(levelKey) ?? { amount: 0n, count: 0 };
+      current.amount += amount;
+      current.count += 1;
+      bucket.totals.set(levelKey, current);
+    });
+
+    return Array.from(buckets.entries())
+      .sort((a, b) => b[1].date.getTime() - a[1].date.getTime())
+      .map(([key, bucket]) => {
+        const totals = Array.from(bucket.totals.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([level, info]) => ({
+            level,
+            amountWei: info.amount,
+            count: info.count,
+          }));
+        return {
+          key,
+          displayDate: bucket.date.toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          }),
+          totals,
+          totalAmountWei: bucket.total,
+          events: bucket.events
+            .slice()
+            .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0)),
+        };
+      });
+  }, [levelIncomeEvents, parseAmountToBigInt]);
 
   // Team by level state
   const [teamDetailsByLevel, setTeamDetailsByLevel] = useState<
@@ -945,35 +1146,142 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-400 mb-1">
                           Income by level
                         </p>
-                        {levelIncome && levelIncome.some((v) => v !== "0") ? (
+                        {levelIncomeDisplay.length === 0 ? (
+                          <p className="text-gray-500">No level income yet</p>
+                        ) : (
                           <ul className="space-y-1">
-                            {levelIncome.map((v, i) => {
-                              if (!v || v === "0") return null;
+                            {levelIncomeDisplay.map((value, index) => {
                               let human = "0";
                               try {
-                                human = (
-                                  Number(BigInt(v) / 10n ** 15n) / 1000
-                                ).toLocaleString();
-                              } catch (e) {
-                                /* ignore */
+                                if (value && value !== "0") {
+                                  human = (
+                                    Number(BigInt(value) / 10n ** 15n) / 1000
+                                  ).toLocaleString();
+                                }
+                              } catch {
+                                human = "0";
                               }
+                              const hasIncome = value && value !== "0";
                               return (
                                 <li
-                                  key={i}
+                                  key={index}
                                   className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
                                 >
                                   <span className="text-gray-200">
-                                    L{i + 1}
+                                    L{index + 1}
                                   </span>
-                                  <span className="text-yellow-400">
-                                    {human} ETN
+                                  <span
+                                    className={
+                                      hasIncome
+                                        ? "text-yellow-400"
+                                        : "text-gray-400"
+                                    }
+                                  >
+                                    {hasIncome ? `${human} ETN` : "0 ETN"}
                                   </span>
                                 </li>
                               );
                             })}
                           </ul>
+                        )}
+                      </div>
+                      {/* Daily Level Income */}
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between mb-1 gap-2">
+                          <p className="text-sm text-gray-400">
+                            Daily level income
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="card-btn card-btn-sec-bg"
+                            onClick={() => void loadLevelIncomeEvents()}
+                            disabled={levelIncomeEventsLoading}
+                          >
+                            {levelIncomeEventsLoading
+                              ? "Loading…"
+                              : levelIncomeEvents.length
+                              ? "Refresh"
+                              : "Load"}
+                          </Button>
+                        </div>
+                        {levelIncomeEventsLoading &&
+                        !levelIncomeEvents.length ? (
+                          <p className="text-xs text-gray-500">
+                            Loading events…
+                          </p>
+                        ) : levelIncomeDaily.length === 0 ? (
+                          <p className="text-xs text-gray-500">
+                            No level income events yet
+                          </p>
                         ) : (
-                          <p className="text-gray-500">No level income yet</p>
+                          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                            {levelIncomeDaily.map((day) => (
+                              <div
+                                key={day.key}
+                                className="bg-gray-900/60 border border-gray-800 rounded px-3 py-3"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-sm text-gray-200">
+                                      {day.displayDate}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      {day.events.length} entr
+                                      {day.events.length === 1 ? "y" : "ies"}
+                                    </p>
+                                  </div>
+                                  <div className="text-sm text-yellow-400 font-semibold">
+                                    {formatWeiToETN(
+                                      day.totalAmountWei.toString()
+                                    )}{" "}
+                                    ETN
+                                  </div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                  {day.totals.map((row) => (
+                                    <div
+                                      key={`daily-lvl-${day.key}-${row.level}`}
+                                      className="flex items-center justify-between bg-black/30 px-2 py-1 rounded"
+                                    >
+                                      <span className="text-gray-300">
+                                        Level {row.level} ({row.count})
+                                      </span>
+                                      <span className="text-yellow-300 font-medium">
+                                        {formatWeiToETN(
+                                          row.amountWei.toString()
+                                        )}{" "}
+                                        ETN
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-3 space-y-2 max-h-48 overflow-y-auto pr-1">
+                                  {day.events.map((evt) => (
+                                    <div
+                                      key={`${day.key}-${evt.txHash}-${evt.levelIndex}`}
+                                      className="flex items-center justify-between bg-black/20 px-2 py-2 rounded"
+                                    >
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="text-xs text-gray-400">
+                                          Level {evt.levelIndex + 1}
+                                        </span>
+                                        <span className="text-xs text-gray-500">
+                                          From {shortAddress(evt.from)}
+                                        </span>
+                                        <span className="text-[11px] text-gray-500">
+                                          {formatEventTime(evt.timestamp)}
+                                        </span>
+                                      </div>
+                                      <span className="text-sm text-yellow-400 font-semibold">
+                                        +{formatWeiToETN(evt.amount)} ETN
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
                       {/* Team by Level */}
@@ -1216,16 +1524,25 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button className="card-btn card-btn-bg">Stake ETN</Button>
                   <Button
-                    variant="outline"
-                    className="card-btn card-btn-sec-bg"
+                    className="card-btn card-btn-bg"
+                    onClick={() => navigate("/stake")}
                   >
-                    Claim Rewards
+                    Stake ETN
                   </Button>
                   <Button
                     variant="outline"
                     className="card-btn card-btn-sec-bg"
+                    onClick={() => void handleClaimRewards()}
+                    disabled={claimLoading || !hasClaimableRewards}
+                    title={!hasClaimableRewards ? "No rewards available" : undefined}
+                  >
+                    {claimLoading ? "Claiming…" : "Claim Rewards"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="card-btn card-btn-sec-bg"
+                    onClick={() => navigate("/bond")}
                   >
                     Buy Bonds
                   </Button>

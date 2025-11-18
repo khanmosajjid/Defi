@@ -1,70 +1,70 @@
-import { Facebook, Instagram, Send, Twitter, Youtube } from 'lucide-react';
+import { Facebook, Instagram, Send, Twitter, Youtube } from "lucide-react";
 
 export default function Footer() {
   const footerSections = [
     {
-      title: 'Protocol',
+      title: "Protocol",
       links: [
-        { name: 'Stake', href: '#stake' },
-        { name: 'Farm', href: '#farm' },
-        { name: 'Swap', href: '#swap' },
-        { name: 'Pool', href: '#pool' }
-      ]
+        { name: "Stake", href: "#stake" },
+        { name: "Farm", href: "#farm" },
+        { name: "Swap", href: "#swap" },
+        { name: "Pool", href: "#pool" },
+      ],
     },
     {
-      title: 'Resources',
+      title: "Resources",
       links: [
-        { name: 'Documentation', href: '#docs' },
-        { name: 'Whitepaper', href: '#whitepaper' },
-        { name: 'Audit Reports', href: '#audits' },
-        { name: 'Bug Bounty', href: '#bounty' }
-      ]
+        { name: "Documentation", href: "#docs" },
+        { name: "Whitepaper", href: "#whitepaper" },
+        { name: "Audit Reports", href: "#audits" },
+        { name: "Bug Bounty", href: "#bounty" },
+      ],
     },
     {
-      title: 'Community',
+      title: "Community",
       links: [
-        { name: 'Governance', href: '#governance' },
-        { name: 'Forum', href: '#forum' },
-        { name: 'Blog', href: '#blog' },
-        { name: 'Newsletter', href: '#newsletter' }
-      ]
+        { name: "Governance", href: "#governance" },
+        { name: "Forum", href: "#forum" },
+        { name: "Blog", href: "#blog" },
+        { name: "Newsletter", href: "#newsletter" },
+      ],
     },
     {
-      title: 'Support',
+      title: "Support",
       links: [
-        { name: 'Help Center', href: '#help' },
-        { name: 'Contact Us', href: '#contact' },
-        { name: 'Terms of Service', href: '#terms' },
-        { name: 'Privacy Policy', href: '#privacy' }
-      ]
-    }
+        { name: "Help Center", href: "#help" },
+        { name: "Contact Us", href: "#contact" },
+        { name: "Terms of Service", href: "#terms" },
+        { name: "Privacy Policy", href: "#privacy" },
+      ],
+    },
   ];
 
   const socialLinks = [
     {
       icon: Instagram,
-      href: 'https://www.instagram.com/ethanofficial628/',
-      label: 'Instagram',
+      href: "https://www.instagram.com/ethanofficial628/",
+      label: "Instagram",
     },
     {
       icon: Twitter,
-      href: 'https://x.com/Ethan164379?t=winytz7U9aZ13IZXXWFZIA&s=09',
-      label: 'X (Twitter)',
+      href: "https://x.com/Ethan164379?t=winytz7U9aZ13IZXXWFZIA&s=09",
+      label: "X (Twitter)",
     },
     {
       icon: Facebook,
-      href: 'https://www.facebook.com/profile.php?id=61582330079749',
-      label: 'Facebook',
+      href: "https://www.facebook.com/profile.php?id=61582330079749",
+      label: "Facebook",
     },
     {
       icon: Youtube,
-      href: 'https://www.youtube.com/@EthanEthan-w7c',
-      label: 'YouTube',
+      href: "https://www.youtube.com/@EthanEthan-w7c",
+      label: "YouTube",
     },
     {
       icon: Send,
-      href: 'https://t.me/ethanofficial628',
-      label: 'Telegram',
+      href: "https://t.me/ethanofficial628",
+      label: "Telegram",
     },
   ];
 
@@ -76,17 +76,18 @@ export default function Footer() {
           {/* Brand Section */}
           <div className="lg:col-span-1">
             <div className="flex items-center space-x-3 mb-6">
-              <img 
-                src="/assets/Ethan_cropped_page-0001.jpg" 
-                alt="ETHAN Logo" 
+              <img
+                src="/assets/Ethan_cropped_page-0001.jpg"
+                alt="ETHAN Logo"
                 className="h-12 w-auto"
               />
             </div>
             <p className="text-gray-400 mb-6 leading-relaxed">
-              ETHAN is the next-generation DeFi platform, empowering users with advanced yield farming, 
-              staking, and trading capabilities in a secure, decentralized environment.
+              ETHAN is the next-generation DeFi platform, empowering users with
+              advanced yield farming, staking, and trading capabilities in a
+              secure, decentralized environment.
             </p>
-            
+
             {/* Social Links */}
             <div className="flex space-x-4">
               {socialLinks.map((social, index) => (
@@ -133,7 +134,8 @@ export default function Footer() {
               Stay Updated with ETHAN
             </h3>
             <p className="text-gray-300 mb-6">
-              Get the latest updates on new features, yield opportunities, and protocol developments.
+              Get the latest updates on new features, yield opportunities, and
+              protocol developments.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
               <input
@@ -155,13 +157,22 @@ export default function Footer() {
               © 2024 ETHAN Protocol. All rights reserved.
             </div>
             <div className="flex space-x-6 text-sm">
-              <a href="#terms" className="text-gray-400 hover:text-yellow-400 transition-colors duration-200">
+              <a
+                href="#terms"
+                className="text-gray-400 hover:text-yellow-400 transition-colors duration-200"
+              >
                 Terms of Service
               </a>
-              <a href="#privacy" className="text-gray-400 hover:text-yellow-400 transition-colors duration-200">
+              <a
+                href="#privacy"
+                className="text-gray-400 hover:text-yellow-400 transition-colors duration-200"
+              >
                 Privacy Policy
               </a>
-              <a href="#cookies" className="text-gray-400 hover:text-yellow-400 transition-colors duration-200">
+              <a
+                href="#cookies"
+                className="text-gray-400 hover:text-yellow-400 transition-colors duration-200"
+              >
                 Cookie Policy
               </a>
             </div>

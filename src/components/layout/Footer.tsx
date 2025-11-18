@@ -13,8 +13,11 @@ export default function Footer() {
       <div className="container mx-auto px-4 py-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Logo and Description */}
-          <div className="md:col-span-2" data-aos="fade-right"
-             data-aos-delay="100">
+          <div
+            className="md:col-span-2"
+            data-aos="fade-right"
+            data-aos-delay="100"
+          >
             <div className="flex items-center space-x-2 mb-4">
               <img
                 src="/assets/ethan-logo.jpg"
@@ -90,8 +93,7 @@ export default function Footer() {
           </div>
 
           {/* Navigation Links */}
-          <div data-aos="fade-right"
-             data-aos-delay="150">
+          <div data-aos="fade-right" data-aos-delay="150">
             <h3 className="text-golden-clr font-semibold mb-4">Navigation</h3>
             <ul className="space-y-2">
               {NAVIGATION_ITEMS.slice(0, 5).map((item) => (
@@ -124,19 +126,24 @@ export default function Footer() {
             </ul>
           </div> */}
 
-          <div className="footer-widget" data-aos="fade-right"
-             data-aos-delay="200">
-             <h3 className="text-golden-clr font-semibold mb-4">Subscribe Newsletter</h3>
+          <div
+            className="footer-widget"
+            data-aos="fade-right"
+            data-aos-delay="200"
+          >
+            <h3 className="text-golden-clr font-semibold mb-4">
+              Subscribe Newsletter
+            </h3>
             <h4 className="fw-title"></h4>
             <div className="footer-newsletter">
               <p className="text-gray-400 text-sm max-w-md mb-4">
-                Exerci tation ullamcorper suscipit lobortis nisl aliquip ex ea
-                commodo
+                Subscribe Our newsletter and get exclusive updates on earning
+                opportunities and platform updates.
               </p>
               <form action="#">
                 <input type="email" placeholder="Info@gmail.com" required />
                 <button type="submit">
-                  <IoIosSend className="send-icon"/>
+                  <IoIosSend className="send-icon" />
                 </button>
               </form>
             </div>

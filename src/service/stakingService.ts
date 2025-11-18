@@ -21,6 +21,41 @@ const TOKEN_ADDRESS = CONTRACT_ADDRESSES.token as `0x${string}`;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const APPROVE_AMOUNT = 1_000_000n * 10n ** 18n;
 const ONE_TOKEN = 10n ** 18n;
+
+function parsePositiveBigInt(value: string | undefined, fallback: bigint) {
+    if (!value) return fallback;
+    try {
+        const parsed = BigInt(value);
+        return parsed > 0n ? parsed : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function bigintToSafeNumber(value: bigint, fallback: number) {
+    if (value <= 0n) return fallback;
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+    return Number(value);
+}
+
+function isPrunedHistoryError(error: unknown) {
+    if (!error) return false;
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('History has been pruned');
+}
+
+function isNetworkTransportError(error: unknown) {
+    if (!error) return false;
+    const message = error instanceof Error ? error.message : String(error);
+    return /Failed to fetch|NetworkError|ERR_FAILED|fetch at|CORS policy/i.test(message);
+}
+
+const DEFAULT_LOG_LOOKBACK = parsePositiveBigInt(import.meta.env.VITE_MAX_LOG_LOOKBACK, 500_000n);
+const PRUNED_RETRY_WINDOW = parsePositiveBigInt(import.meta.env.VITE_PRUNED_RETRY_WINDOW, DEFAULT_LOG_LOOKBACK);
+const MIN_LOG_SPLIT_THRESHOLD = 1_000n;
+
 function resolveReferrerAddress(
     candidates: Array<string | undefined | null>,
     self?: string | null
@@ -92,6 +127,15 @@ type HistoryPage = {
     pageSize: number;
     totalItems: number;
     totalPages: number;
+};
+
+type LevelIncomeEvent = {
+    txHash: string;
+    blockNumber: number;
+    timestamp: number;
+    amount: string;
+    from?: string;
+    levelIndex: number;
 };
 
 function mapChainId(input: number | undefined): 1 | 10 | 56 | 97 | 137 | 42161 | 8453 {
@@ -1036,7 +1080,7 @@ export function useStakingContract() {
     const fetchHistoryFromEvents = useCallback(
         async (
             kind: Extract<ActivityKind, 'STAKE' | 'UNSTAKE'>,
-            options?: { page?: number; pageSize?: number }
+            options?: { page?: number; pageSize?: number; fromBlock?: bigint; toBlock?: bigint; maxBlocksBack?: number }
         ): Promise<HistoryPage> => {
             const DEFAULT_PAGE_SIZE = 10;
             if (!viewingAddress || !publicClient) {
@@ -1045,15 +1089,89 @@ export function useStakingContract() {
 
             const latest = await publicClient.getBlockNumber();
             const event = kind === 'STAKE' ? EVT.Staked : EVT.Unstaked;
-            const logs = await publicClient.getLogs({
-                address: CONTRACT_ADDRESS,
-                event,
-                args: { user: viewingAddress },
-                fromBlock: 0n,
-                toBlock: latest,
+            const maxBlocksBack = options?.maxBlocksBack != null ? BigInt(Math.max(0, options.maxBlocksBack)) : DEFAULT_LOG_LOOKBACK;
+            const defaultFromBlock = maxBlocksBack > 0n && latest > maxBlocksBack ? latest - maxBlocksBack : 0n;
+            const fromBlock = options?.fromBlock ?? defaultFromBlock;
+            const toBlock = options?.toBlock ?? latest;
+
+            type LogRange = { from: bigint; to: bigint };
+
+            const ranges: LogRange[] = [{ from: fromBlock, to: toBlock }];
+            const collected: Array<{ args?: Record<string, unknown>; blockNumber?: bigint | number | null; transactionHash?: string }> = [];
+            const visited = new Set<string>();
+            let encounteredPruned = false;
+            let encounteredNetworkError = false;
+
+            while (ranges.length) {
+                const { from, to } = ranges.pop() as LogRange;
+                if (from > to) continue;
+                const key = `${from}-${to}`;
+                if (visited.has(key)) continue;
+                visited.add(key);
+                try {
+                    const slice = await publicClient.getLogs({
+                        address: CONTRACT_ADDRESS,
+                        event,
+                        args: { user: viewingAddress },
+                        fromBlock: from,
+                        toBlock: to,
+                    });
+                    collected.push(...(slice as Array<{ args?: Record<string, unknown>; blockNumber?: bigint | number | null; transactionHash?: string }>));
+                } catch (error) {
+                    if (isNetworkTransportError(error)) {
+                        encounteredNetworkError = true;
+                        console.warn('getLogs network error', {
+                            from: from.toString(),
+                            to: to.toString(),
+                            error,
+                        });
+                        break;
+                    }
+                    if (isPrunedHistoryError(error)) {
+                        encounteredPruned = true;
+                        const span = to > from ? to - from : 0n;
+                        const window = PRUNED_RETRY_WINDOW > 0n ? PRUNED_RETRY_WINDOW : span;
+                        let adjustedFrom = to > window ? to - window : 0n;
+                        if (adjustedFrom <= from) {
+                            const half = span > 1n ? span / 2n : 1n;
+                            adjustedFrom = to > half ? to - half : (from < to ? from + 1n : from);
+                        }
+                        if (adjustedFrom < to) {
+                            ranges.push({ from: adjustedFrom, to });
+                        }
+                        console.warn('getLogs pruned history window', {
+                            from: from.toString(),
+                            to: to.toString(),
+                            adjustedFrom: adjustedFrom.toString(),
+                            error,
+                        });
+                        continue;
+                    }
+                    const span = to - from;
+                    if (span <= MIN_LOG_SPLIT_THRESHOLD) {
+                        console.warn('getLogs range failed', { from: from.toString(), to: to.toString(), error });
+                        continue;
+                    }
+                    const mid = from + span / 2n;
+                    ranges.push({ from, to: mid }, { from: mid + 1n, to });
+                }
+            }
+
+            if (encounteredNetworkError) {
+                console.warn('Aborting history fetch due to persistent network/transport error. Configure a reliable RPC endpoint.');
+                return buildHistoryPage([], options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
+            }
+
+            collected.sort((a, b) => {
+                const aNum = Number((a.blockNumber ?? 0) as number | bigint);
+                const bNum = Number((b.blockNumber ?? 0) as number | bigint);
+                return aNum - bNum;
             });
 
-            const entries = await mapHistoryEntries(logs);
+            const entries = await mapHistoryEntries(collected);
+            if (encounteredPruned) {
+                console.warn('Some staking history is beyond the current RPC archive window. Configure VITE_BSC_RPC_URL with an archive node to load older events.');
+            }
             return buildHistoryPage(entries, options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
         },
         [EVT.Staked, EVT.Unstaked, buildHistoryPage, mapHistoryEntries, publicClient, viewingAddress]
@@ -1070,7 +1188,8 @@ export function useStakingContract() {
             if (!viewingAddress || !publicClient) return [];
 
             const latest = await publicClient.getBlockNumber();
-            const maxBack = BigInt(options?.maxBlocksBack ?? 200_000);
+            const defaultBackNumber = bigintToSafeNumber(DEFAULT_LOG_LOOKBACK, 200_000);
+            const maxBack = BigInt(options?.maxBlocksBack ?? defaultBackNumber);
             const fromBlock = options?.fromBlock ?? (latest > maxBack ? latest - maxBack : 0n);
             const toBlock = options?.toBlock ?? latest;
 
@@ -1332,6 +1451,71 @@ export function useStakingContract() {
         [publicClient, EVT, ERC20_EVT, viewingAddress]
     );
 
+    const fetchLevelIncomeEvents = useCallback(
+        async (options?: { fromBlock?: bigint; toBlock?: bigint; maxBlocksBack?: number }): Promise<LevelIncomeEvent[]> => {
+            if (!viewingAddress || !publicClient) return [];
+
+            try {
+                const latest = await publicClient.getBlockNumber();
+                const maxBack = BigInt(options?.maxBlocksBack ?? 200_000);
+                const fromBlock = options?.fromBlock ?? (latest > maxBack ? latest - maxBack : 0n);
+                const toBlock = options?.toBlock ?? latest;
+
+                const logs = await publicClient.getLogs({
+                    address: CONTRACT_ADDRESS,
+                    event: EVT.ReferralCreditedFromPool,
+                    args: { to: viewingAddress },
+                    fromBlock,
+                    toBlock,
+                });
+
+                const blockNumbers = Array.from(
+                    logs.reduce<Set<number>>((set, log) => {
+                        const value = (log as { blockNumber?: bigint | number | null }).blockNumber;
+                        if (value != null) set.add(Number(value));
+                        return set;
+                    }, new Set<number>())
+                );
+
+                const blockTimestampMap = new Map<number, number>();
+                await Promise.allSettled(
+                    blockNumbers.map(async (bn) => {
+                        try {
+                            const block = await publicClient.getBlock({ blockNumber: BigInt(bn) });
+                            blockTimestampMap.set(bn, Number(block.timestamp));
+                        } catch {
+                            blockTimestampMap.set(bn, 0);
+                        }
+                    })
+                );
+
+                return (logs as Array<{ args?: Record<string, unknown>; transactionHash: string; blockNumber?: bigint | number | null }>).
+                    map((log) => {
+                        const args = log.args ?? {};
+                        const blockNum = Number(log.blockNumber ?? 0n);
+                        return {
+                            txHash: log.transactionHash,
+                            blockNumber: blockNum,
+                            timestamp: blockTimestampMap.get(blockNum) ?? 0,
+                            amount: toStr(args.amount) ?? '0',
+                            from: toStr(args.from),
+                            levelIndex: toNum(args.levelIndex) ?? 0,
+                        } satisfies LevelIncomeEvent;
+                    })
+                    .sort((a, b) => {
+                        if (a.timestamp === b.timestamp) {
+                            return b.blockNumber - a.blockNumber;
+                        }
+                        return b.timestamp - a.timestamp;
+                    });
+            } catch (error) {
+                console.error('fetchLevelIncomeEvents error', error);
+                return [];
+            }
+        },
+        [EVT, publicClient, viewingAddress]
+    );
+
     const fetchStakeHistory = useCallback(
         async (options?: { page?: number; pageSize?: number }) => {
             return fetchHistoryFromEvents('STAKE', options);
@@ -1435,6 +1619,7 @@ export function useStakingContract() {
         fetchMemberDetails,
         fetchStakeHistory,
         fetchUnstakeHistory,
+        fetchLevelIncomeEvents,
         fetchROIHistoryFull,
         fetchLastNROIEvents,
         directsList,
@@ -1450,3 +1635,5 @@ export function useStakingContract() {
         refetchTokenPrice,
     };
 }
+
+export type { LevelIncomeEvent };
