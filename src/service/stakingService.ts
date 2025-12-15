@@ -103,7 +103,7 @@ type ActivityItem = {
     meta?: Record<string, unknown>;
 };
 
-type DirectDetail = {
+export type DirectDetail = {
     address: string;
     selfStaked: string;
     stakeWithAccrued: string;
@@ -120,6 +120,18 @@ type HistoryEntry = {
     txHash?: string;
     blockNumber?: number;
 };
+
+function buildEmptyDirectDetail(address: string): DirectDetail {
+    return {
+        address,
+        selfStaked: '0',
+        stakeWithAccrued: '0',
+        pendingRoi: '0',
+        level: 0,
+        referralIncome: '0',
+        totalReferralIncome: '0',
+    } satisfies DirectDetail;
+}
 
 type HistoryPage = {
     items: HistoryEntry[];
@@ -769,15 +781,7 @@ export function useStakingContract() {
             } satisfies DirectDetail;
         } catch (err) {
             console.warn('getMemberDetail failed', addr, err);
-            return {
-                address: addr,
-                selfStaked: '0',
-                stakeWithAccrued: '0',
-                pendingRoi: '0',
-                level: 0,
-                referralIncome: '0',
-                totalReferralIncome: '0',
-            } satisfies DirectDetail;
+            return buildEmptyDirectDetail(addr);
         }
     }, [supportedChainId]);
 
@@ -792,15 +796,7 @@ export function useStakingContract() {
                 return result.value;
             }
             console.warn('fetchMemberDetails fallback for', addr, result);
-            return {
-                address: addr,
-                selfStaked: '0',
-                stakeWithAccrued: '0',
-                pendingRoi: '0',
-                level: 0,
-                referralIncome: '0',
-                totalReferralIncome: '0',
-            } satisfies DirectDetail;
+            return buildEmptyDirectDetail(addr);
         });
     }, [getMemberDetail]);
 
@@ -864,6 +860,87 @@ export function useStakingContract() {
             return 0;
         }
     }, [supportedChainId, viewingAddress]);
+
+    const fetchTotalUsers = useCallback(async () => {
+        try {
+            const result = await readContractSafe<unknown>({
+                address: CONTRACT_ADDRESS,
+                abi: CONTRACT_ABI,
+                functionName: 'getTotalUsers',
+                chainId: supportedChainId,
+            });
+            const total = Number(extractString(result) ?? '0');
+            return Number.isNaN(total) ? 0 : total;
+        } catch (err) {
+            console.error('fetchTotalUsers error', err);
+            return 0;
+        }
+    }, [supportedChainId]);
+
+    const fetchUsersBatch = useCallback(
+        async (offset = 0, limit = 25): Promise<{ total: number; items: DirectDetail[] }> => {
+            const safeOffset = Math.max(0, offset);
+            const safeLimit = Math.max(0, limit);
+            const total = await fetchTotalUsers();
+            if (total === 0 || safeLimit === 0 || safeOffset >= total) {
+                return { total, items: [] };
+            }
+
+            const end = Math.min(total, safeOffset + safeLimit);
+            const indices = Array.from({ length: end - safeOffset }, (_, idx) => BigInt(safeOffset + idx));
+
+            const responses = await Promise.allSettled(
+                indices.map((idx) =>
+                    readContractSafe<string>({
+                        address: CONTRACT_ADDRESS,
+                        abi: CONTRACT_ABI,
+                        functionName: 'allUsers',
+                        args: [idx],
+                        chainId: supportedChainId,
+                    })
+                )
+            );
+
+            const addresses = responses.map((res) => (res.status === 'fulfilled' ? res.value : null));
+            const validAddresses = addresses.filter((addr): addr is string => Boolean(addr && addr.startsWith('0x')));
+            const detailsForValid = await fetchMemberDetails(validAddresses);
+            const detailMap = new Map(detailsForValid.map((detail) => [detail.address.toLowerCase(), detail]));
+
+            const items = addresses
+                .map((addr) => {
+                    if (!addr || typeof addr !== 'string' || !addr.startsWith('0x')) {
+                        return null;
+                    }
+                    return detailMap.get(addr.toLowerCase()) ?? buildEmptyDirectDetail(addr);
+                })
+                .filter((entry): entry is DirectDetail => entry !== null);
+
+            return { total, items };
+        },
+        [fetchMemberDetails, fetchTotalUsers, supportedChainId]
+    );
+
+    const fetchCompanyPoolStatus = useCallback(async () => {
+        try {
+            const result = await readContractSafe<unknown>({
+                address: CONTRACT_ADDRESS,
+                abi: CONTRACT_ABI,
+                functionName: 'getCompanyPoolStatus',
+                chainId: supportedChainId,
+            });
+            if (Array.isArray(result) && result.length >= 2) {
+                const [pool, balance] = result as [unknown, unknown];
+                return {
+                    poolBalance: extractString(pool) ?? '0',
+                    contractTokenBalance: extractString(balance) ?? '0',
+                };
+            }
+            return { poolBalance: '0', contractTokenBalance: '0' };
+        } catch (err) {
+            console.error('fetchCompanyPoolStatus error', err);
+            return { poolBalance: '0', contractTokenBalance: '0' };
+        }
+    }, [supportedChainId]);
 
     useEffect(() => {
         const targetAddress = viewingAddress;
@@ -1627,6 +1704,9 @@ export function useStakingContract() {
         loadingDirects,
         teamSize,
         fetchTeamSize,
+        fetchTotalUsers,
+        fetchUsersBatch,
+        fetchCompanyPoolStatus,
         refetchTotalStaked,
         refetchUserInfo,
         refetchPendingRewards,
@@ -1636,4 +1716,4 @@ export function useStakingContract() {
     };
 }
 
-export type { LevelIncomeEvent };
+export type { LevelIncomeEvent, DirectDetail };

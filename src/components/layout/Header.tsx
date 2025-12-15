@@ -1,14 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
-import menuIcon from "../../assets/img/shape/menu.png";
 import { NAVIGATION_ITEMS } from "@/lib/constants";
 
 export default function Header() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [, setIsOpen] = useState(false);
   const location = useLocation();
 
   const [isVisible, setIsVisible] = useState(true);

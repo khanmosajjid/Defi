@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { useStakingContract } from "@/service/stakingService";
 import { useAccount, useChainId } from "wagmi";
@@ -10,10 +10,37 @@ import StatCard from "@/components/common/StatCard";
 import { Coins, TrendingUp, Clock, Zap, ArrowRight } from "lucide-react";
 import { STATS, CONTRACT_ADDRESSES, DEFAULT_REFERRER } from "@/lib/constants";
 import { useTokenSwap } from "@/hooks/useTokenSwap";
+import { formatUnits, parseUnits } from "viem";
+
+const BURN_FACTOR_NUM = 99n;
+const BURN_FACTOR_DEN = 100n;
+
+const trimTrailingZeros = (value: string) => {
+  if (!value.includes(".")) return value;
+  const trimmed = value.replace(/(\.\d*?)0+$/u, "$1").replace(/\.$/u, "");
+  return trimmed.length > 0 ? trimmed : "0";
+};
+
+const applyBurnDeduction = (
+  value: string | null | undefined,
+  decimals = 18
+) => {
+  try {
+    if (!value) return "0";
+    const amountWei = parseUnits(value, decimals);
+    if (amountWei <= 0n) return "0";
+    const netWei = (amountWei * BURN_FACTOR_NUM) / BURN_FACTOR_DEN;
+    if (netWei <= 0n) return "0";
+    return trimTrailingZeros(formatUnits(netWei, decimals));
+  } catch {
+    return "0";
+  }
+};
 
 export default function Stake() {
   const [stakeAmount, setStakeAmount] = useState("");
-  const [referralAddress, setReferralAddress] = useState(DEFAULT_REFERRER);
+  const [referralAddress, setReferralAddress] =
+    useState<string>(DEFAULT_REFERRER);
   const [unstakeAmount, setUnstakeAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
@@ -43,6 +70,17 @@ export default function Stake() {
   const { address: connectedAddress } = useAccount();
   const chainId = useChainId();
   const { getQuote, executeSwap, isLoading: swapLoading } = useTokenSwap();
+  const [etnSellAmount, setEtnSellAmount] = useState("");
+  const [quotedUSDT, setQuotedUSDT] = useState("0");
+  const [isSellProcessing, setIsSellProcessing] = useState(false);
+  const netQuotedETHAN = useMemo(
+    () => applyBurnDeduction(quotedETHAN),
+    [quotedETHAN]
+  );
+  const netQuotedUSDT = useMemo(
+    () => applyBurnDeduction(quotedUSDT, 18),
+    [quotedUSDT]
+  );
 
   // referral param from URL (if present)
   const [refFromUrl, setRefFromUrl] = useState<string | null>(null);
@@ -96,6 +134,29 @@ export default function Stake() {
     };
     fetchQuote();
   }, [stakeAmount, getQuote, tokens.USDT, tokens.ETHAN]);
+
+  // Auto quote USDT when user types ETN amount to sell
+  useEffect(() => {
+    let cancelled = false;
+    const fetchQuote = async () => {
+      if (!etnSellAmount || parseFloat(etnSellAmount) <= 0) {
+        if (!cancelled) setQuotedUSDT("0");
+        return;
+      }
+      try {
+        const quote = await getQuote(etnSellAmount, tokens.ETHAN, tokens.USDT);
+        if (!cancelled) setQuotedUSDT(quote);
+      } catch (err) {
+        console.error("Sell quote fetch failed", err);
+        if (!cancelled) setQuotedUSDT("0");
+      }
+    };
+
+    void fetchQuote();
+    return () => {
+      cancelled = true;
+    };
+  }, [etnSellAmount, getQuote, tokens.ETHAN, tokens.USDT]);
 
   const userStaked = userInfo?.selfStaked ?? "0";
   const userStakedHuman = formatWeiToEtn(userStaked);
@@ -228,6 +289,16 @@ export default function Stake() {
       return;
     }
 
+    const netQuotedFloat = parseFloat(netQuotedETHAN || "0");
+    if (
+      !netQuotedETHAN ||
+      Number.isNaN(netQuotedFloat) ||
+      netQuotedFloat <= 0
+    ) {
+      toast.error("Unable to determine ETN output after burn. Try again.");
+      return;
+    }
+
     // If the user already has a registered referrer on-chain, use that address.
     // Otherwise prefer the input referralAddress (if valid), then fall back to connected address.
     let ref = "";
@@ -238,27 +309,29 @@ export default function Stake() {
       if (!ref || !ref.startsWith("0x")) ref = DEFAULT_REFERRER;
     }
 
+    setIsProcessing(true);
     try {
       const balanceBig = BigInt(tokenBalance || "0");
-      // estimated amount we expect from swap (human string), convert to wei
-      const quotedOutFloat = parseFloat(quotedETHAN || "0");
-      const quotedOutWei =
-        quotedOutFloat > 0 ? BigInt(Math.floor(quotedOutFloat * 1e18)) : 0n;
+      let quotedWei: bigint = 0n;
+      try {
+        quotedWei = parseUnits(quotedETHAN || "0", 18);
+      } catch {
+        quotedWei = 0n;
+      }
+      const netQuotedWei =
+        quotedWei > 0n ? (quotedWei * BURN_FACTOR_NUM) / BURN_FACTOR_DEN : 0n;
 
-      // base amount to stake is the quotedOutWei (what we expect to receive) or, when skipping swap, the quoted amount as well
-      const baseStakeWei = quotedOutWei;
+      if (netQuotedWei === 0n) {
+        toast.error("Swap quote unavailable. Try again later.");
+        return;
+      }
 
-      // stake 98% to account for fees/slippage
-      const stakeWeiToSend = baseStakeWei > 0n ? baseStakeWei : 0n;
-
-      // If user already has sufficient balance (>= quotedOutWei), skip swap and stake the 98% of quoted amount
-      if (balanceBig >= quotedOutWei && quotedOutWei > 0n) {
+      if (balanceBig >= netQuotedWei) {
         toast.success("Sufficient token balance found — skipping swap");
         const stakeToast = toast.loading("Staking your tokens...");
         try {
-          // convert stakeWeiToSend to decimal string with 18 decimals
-          const whole = stakeWeiToSend / 10n ** 18n;
-          const frac = stakeWeiToSend % 10n ** 18n;
+          const whole = netQuotedWei / 10n ** 18n;
+          const frac = netQuotedWei % 10n ** 18n;
           const tokenStr = `${whole.toString()}.${frac
             .toString()
             .padStart(18, "0")}`;
@@ -276,7 +349,7 @@ export default function Stake() {
 
         const txHash = await executeSwap(
           stakeAmount,
-          quotedETHAN,
+          netQuotedETHAN,
           tokens.USDT,
           tokens.ETHAN,
           2
@@ -286,7 +359,6 @@ export default function Stake() {
 
         if (!txHash) {
           toast.error("Swap failed — staking aborted");
-          setIsProcessing(false);
           return;
         }
 
@@ -310,10 +382,7 @@ export default function Stake() {
           }
         }
 
-        const quotedFloat = parseFloat(quotedETHAN || "0");
-        const quotedWei =
-          quotedFloat > 0 ? BigInt(Math.floor(quotedFloat * 1e18)) : 0n;
-        let stakeWei = quotedWei > 0n ? (quotedWei * 985n) / 1000n : 0n;
+        let stakeWei = netQuotedWei;
 
         if (
           stakeWei > 0n &&
@@ -322,8 +391,6 @@ export default function Stake() {
         ) {
           stakeWei = walletBalanceWei;
         }
-
-        if (quotedWei > 0n && stakeWei === 0n) stakeWei = 1n;
 
         if (stakeWei <= 0n || walletBalanceWei <= 0n) {
           toast.error("Insufficient ETN balance after swap");
@@ -582,12 +649,18 @@ export default function Stake() {
                         </div>
                       )}
 
-                      {stakeAmount && (
+                      {parseFloat(stakeAmount || "0") > 0 && (
                         <div className="input-bg p-4 rounded-lg space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span>Approx Tokens (ETHAN):</span>
-                            <span className="text-green-400">
+                            <span>Gross Quote (ETHAN):</span>
+                            <span className="text-yellow-400">
                               {quotedETHAN || "0"} ETN
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span>After 1% Burn (received):</span>
+                            <span className="text-green-400">
+                              {netQuotedETHAN || "0"} ETN
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
@@ -604,6 +677,8 @@ export default function Stake() {
                         disabled={
                           !stakeAmount ||
                           parseFloat(stakeAmount) <= 0 ||
+                          !netQuotedETHAN ||
+                          parseFloat(netQuotedETHAN || "0") <= 0 ||
                           isProcessing ||
                           swapLoading
                         }
@@ -614,6 +689,135 @@ export default function Stake() {
                           : "Swap & Stake"}
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
+                      {/* ETN -> USDT swap (simple one-off) */}
+                      {/* <div className="mt-6 p-4 input-bg rounded-lg">
+                        <h4 className="text-sm text-gray-300 mb-3">
+                          Convert ETN → USDT
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3">
+                          <div>
+                            <label className="text-xs text-gray-400 block mb-1">
+                              Amount (ETN)
+                            </label>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              value={etnSellAmount}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "" || /^\d*\.?\d*$/.test(v))
+                                  setEtnSellAmount(v);
+                              }}
+                              className="custom-input input-bg border-gray-700 text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-sm text-gray-400 mb-1">
+                              <span>Gross Quote (USDT)</span>
+                              <span className="text-yellow-400">
+                                {quotedUSDT || "0"} USDT
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm text-gray-400 mb-1">
+                              <span>After 1% Burn (you receive)</span>
+                              <span className="text-green-400">
+                                {netQuotedUSDT || "0"} USDT
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Quote updates automatically as you type.
+                            </div>
+                          </div>
+
+                          <div>
+                            <Button
+                              className="w-full bg-transparent border border-yellow-500 text-yellow-400"
+                              disabled={
+                                !etnSellAmount ||
+                                parseFloat(etnSellAmount || "0") <= 0 ||
+                                !netQuotedUSDT ||
+                                parseFloat(netQuotedUSDT || "0") <= 0 ||
+                                isSellProcessing ||
+                                swapLoading
+                              }
+                              onClick={async () => {
+                                if (!connectedAddress) {
+                                  toast.error(
+                                    "Please connect your wallet to swap"
+                                  );
+                                  return;
+                                }
+
+                                const amt = parseFloat(etnSellAmount || "0");
+                                if (isNaN(amt) || amt <= 0) {
+                                  toast.error(
+                                    "Enter a valid ETN amount to swap"
+                                  );
+                                  return;
+                                }
+
+                                if (!quotedUSDT || quotedUSDT === "0") {
+                                  toast.error(
+                                    "Unable to fetch quote. Try again later."
+                                  );
+                                  return;
+                                }
+
+                                if (!netQuotedUSDT || netQuotedUSDT === "0") {
+                                  toast.error(
+                                    "Unable to calculate USDT after burn."
+                                  );
+                                  return;
+                                }
+
+                                setIsSellProcessing(true);
+                                try {
+                                  const swapToast = toast.loading(
+                                    `Swapping ${etnSellAmount} ETN → USDT...`
+                                  );
+                                  const txHash = await executeSwap(
+                                    etnSellAmount,
+                                    netQuotedUSDT,
+                                    tokens.ETHAN,
+                                    tokens.USDT,
+                                    2
+                                  );
+                                  toast.dismiss(swapToast);
+                                  if (!txHash) {
+                                    toast.error("Swap failed");
+                                    return;
+                                  }
+                                  toast.success("Swap completed");
+
+                                  if (
+                                    typeof refetchTokenBalance === "function"
+                                  ) {
+                                    try {
+                                      await refetchTokenBalance();
+                                    } catch {
+                                      // ignore
+                                    }
+                                  }
+
+                                  setEtnSellAmount("");
+                                  setQuotedUSDT("0");
+                                } catch (err) {
+                                  console.error("ETN->USDT swap failed", err);
+                                  toast.error("Swap failed");
+                                } finally {
+                                  setIsSellProcessing(false);
+                                }
+                              }}
+                            >
+                              {isSellProcessing || swapLoading
+                                ? "Processing..."
+                                : "Swap ETN → USDT"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div> */}
                     </div>
                   </TabsContent>
 

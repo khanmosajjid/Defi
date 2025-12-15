@@ -53,7 +53,7 @@ export function useTokenSwap() {
             if (allowance < amountInWei) {
                 toast('Approving token spend...')
                 // Approve MAX to avoid repeated approvals
-                await SwapService.approveToken(tokenInAddress, 'max')
+                await SwapService.approveToken(tokenInAddress, address, 'max')
                 toast.success('Token approved successfully')
             }
 
