@@ -114,6 +114,13 @@ export type DirectDetail = {
     rank?: number;
 };
 
+type DistributionWalletsConfig = {
+    community: `0x${string}`;
+    treasury: `0x${string}`;
+    marketing: `0x${string}`;
+    liquidity: `0x${string}`;
+};
+
 type HistoryEntry = {
     amount: string;
     timestamp: number;
@@ -713,6 +720,60 @@ export function useStakingContract() {
             return receipt;
         } catch (err) {
             console.error('withdrawBond error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function blockUserAddress(target: `0x${string}`) {
+        const txToast = toast.loading('Blocking user...');
+        try {
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'blockUser',
+                args: [target],
+            });
+            toast.success('User blocked successfully', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('blockUser error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function unblockUserAddress(target: `0x${string}`) {
+        const txToast = toast.loading('Unblocking user...');
+        try {
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'unBlockUser',
+                args: [target],
+            });
+            toast.success('User unblocked successfully', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('unblockUser error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function setDistributionWalletsOnChain(wallets: DistributionWalletsConfig) {
+        const txToast = toast.loading('Updating distribution wallets...');
+        try {
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'setDistributionWallets',
+                args: [wallets.community, wallets.treasury, wallets.marketing, wallets.liquidity],
+            });
+            toast.success('Distribution wallets updated', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('setDistributionWallets error', err);
             toast.error(getErrorMessage(err), { id: txToast });
             throw err;
         }
@@ -1687,6 +1748,9 @@ export function useStakingContract() {
         fetchUserBonds,
         buyBond,
         withdrawBond,
+        blockUser: blockUserAddress,
+        unblockUser: unblockUserAddress,
+        setDistributionWallets: setDistributionWalletsOnChain,
         fetchUserLevelIncome,
         fetchUserActivity,
         mapHistoryEntries,

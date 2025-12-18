@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,29 @@ import {
 import CONTRACT_ABI from "@/service/stakingABI.json";
 
 const PAGE_SIZE = 25;
+
+const EMPTY_WALLET_STATE = {
+  community: "",
+  treasury: "",
+  marketing: "",
+  liquidity: "",
+} as const;
+
+type WalletField = keyof typeof EMPTY_WALLET_STATE;
+
+const WALLET_FIELDS: WalletField[] = [
+  "community",
+  "treasury",
+  "marketing",
+  "liquidity",
+];
+
+const WALLET_LABEL_MAP: Record<WalletField, string> = {
+  community: "Community",
+  treasury: "Treasury",
+  marketing: "Marketing",
+  liquidity: "Liquidity",
+};
 
 function formatTokenAmount(
   value?: string | bigint | null,
@@ -61,11 +85,46 @@ const Admin = () => {
     return ownerAddress.toLowerCase() === connectedAddress.toLowerCase();
   }, [connectedAddress, ownerAddress]);
 
+  const { data: communityWalletData, refetch: refetchCommunityWallet } =
+    useReadContract({
+      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "communityWallet",
+      query: { enabled: isAdmin },
+    });
+
+  const { data: treasuryWalletData, refetch: refetchTreasuryWallet } =
+    useReadContract({
+      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "treasuryWallet",
+      query: { enabled: isAdmin },
+    });
+
+  const { data: marketingWalletData, refetch: refetchMarketingWallet } =
+    useReadContract({
+      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "marketingWallet",
+      query: { enabled: isAdmin },
+    });
+
+  const { data: liquidityWalletData, refetch: refetchLiquidityWallet } =
+    useReadContract({
+      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "liquidityWallet",
+      query: { enabled: isAdmin },
+    });
+
   const {
     totalStaked,
     fetchUsersBatch,
     fetchMemberDetails,
     fetchCompanyPoolStatus,
+    blockUser: blockUserOnChain,
+    unblockUser: unblockUserOnChain,
+    setDistributionWallets: updateDistributionWallets,
   } = useStakingContract();
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -81,6 +140,44 @@ const Admin = () => {
   const [searchValue, setSearchValue] = useState("");
   const [searchResult, setSearchResult] = useState<DirectDetail | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [manageUserAddress, setManageUserAddress] = useState("");
+  const [manageAction, setManageAction] = useState<null | "block" | "unblock">(
+    null
+  );
+  const [walletInputs, setWalletInputs] = useState({ ...EMPTY_WALLET_STATE });
+  const [walletDirty, setWalletDirty] = useState(false);
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
+
+  const manageAddressIsValid = useMemo(
+    () => Boolean(normalizeAddress(manageUserAddress)),
+    [manageUserAddress]
+  );
+
+  const toAddressString = (value: unknown) =>
+    typeof value === "string" ? value : value ? String(value) : "";
+
+  const distributionDefaults = useMemo(
+    () => ({
+      community: toAddressString(communityWalletData),
+      treasury: toAddressString(treasuryWalletData),
+      marketing: toAddressString(marketingWalletData),
+      liquidity: toAddressString(liquidityWalletData),
+    }),
+    [
+      communityWalletData,
+      treasuryWalletData,
+      marketingWalletData,
+      liquidityWalletData,
+    ]
+  );
+
+  const hasDistributionDefaults = useMemo(
+    () => Object.values(distributionDefaults).some((value) => value.length > 0),
+    [distributionDefaults]
+  );
+
+  const manageBusy = manageAction !== null;
+  const canSubmitDistribution = walletDirty && !walletSubmitting;
 
   const totalStakedDisplay = formatTokenAmount(totalStaked ?? null);
   const poolBalanceDisplay = formatTokenAmount(companyPool.poolBalance);
@@ -94,8 +191,27 @@ const Admin = () => {
       setTotalUsers(0);
       setPageIndex(0);
       setCompanyPool({ poolBalance: "0", contractTokenBalance: "0" });
+      setManageUserAddress("");
+      setManageAction(null);
+      setWalletInputs({ ...EMPTY_WALLET_STATE });
+      setWalletDirty(false);
+      setWalletSubmitting(false);
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (walletDirty) return;
+    setWalletInputs((prev) => {
+      const matches =
+        prev.community === distributionDefaults.community &&
+        prev.treasury === distributionDefaults.treasury &&
+        prev.marketing === distributionDefaults.marketing &&
+        prev.liquidity === distributionDefaults.liquidity;
+      if (matches) return prev;
+      return { ...distributionDefaults };
+    });
+  }, [distributionDefaults, isAdmin, walletDirty]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -163,6 +279,100 @@ const Admin = () => {
     } finally {
       setSearchLoading(false);
     }
+  };
+
+  const handleWalletChange =
+    (field: WalletField) => (event: ChangeEvent<HTMLInputElement>) => {
+      const { value } = event.target;
+      setWalletInputs((prev) => {
+        const next = { ...prev, [field]: value };
+        const matchesDefaults =
+          next.community === distributionDefaults.community &&
+          next.treasury === distributionDefaults.treasury &&
+          next.marketing === distributionDefaults.marketing &&
+          next.liquidity === distributionDefaults.liquidity;
+        setWalletDirty(!matchesDefaults);
+        return next;
+      });
+    };
+
+  const handleBlockUser = async () => {
+    const normalized = normalizeAddress(manageUserAddress);
+    if (!normalized) {
+      toast.error("Enter a valid wallet address to manage");
+      return;
+    }
+    setManageAction("block");
+    try {
+      await blockUserOnChain(normalized as `0x${string}`);
+      setManageUserAddress("");
+    } catch (error) {
+      console.error("blockUserOnChain failed", error);
+    } finally {
+      setManageAction(null);
+    }
+  };
+
+  const handleUnblockUser = async () => {
+    const normalized = normalizeAddress(manageUserAddress);
+    if (!normalized) {
+      toast.error("Enter a valid wallet address to manage");
+      return;
+    }
+    setManageAction("unblock");
+    try {
+      await unblockUserOnChain(normalized as `0x${string}`);
+      setManageUserAddress("");
+    } catch (error) {
+      console.error("unblockUserOnChain failed", error);
+    } finally {
+      setManageAction(null);
+    }
+  };
+
+  const handleUpdateDistribution = async () => {
+    const normalizedValues = {} as Record<WalletField, string>;
+
+    for (const field of WALLET_FIELDS) {
+      const normalized = normalizeAddress(walletInputs[field]);
+      if (!normalized) {
+        toast.error(`Enter a valid ${WALLET_LABEL_MAP[field]} wallet address`);
+        return;
+      }
+      normalizedValues[field] = normalized;
+    }
+
+    setWalletSubmitting(true);
+    try {
+      await updateDistributionWallets({
+        community: normalizedValues.community as `0x${string}`,
+        treasury: normalizedValues.treasury as `0x${string}`,
+        marketing: normalizedValues.marketing as `0x${string}`,
+        liquidity: normalizedValues.liquidity as `0x${string}`,
+      });
+      setWalletInputs({
+        community: normalizedValues.community,
+        treasury: normalizedValues.treasury,
+        marketing: normalizedValues.marketing,
+        liquidity: normalizedValues.liquidity,
+      });
+      setWalletDirty(false);
+      await Promise.allSettled([
+        refetchCommunityWallet(),
+        refetchTreasuryWallet(),
+        refetchMarketingWallet(),
+        refetchLiquidityWallet(),
+      ]);
+    } catch (error) {
+      console.error("updateDistributionWallets failed", error);
+    } finally {
+      setWalletSubmitting(false);
+    }
+  };
+
+  const handleResetDistribution = () => {
+    setWalletInputs({ ...distributionDefaults });
+    setWalletDirty(false);
   };
 
   const pageStart = totalUsers === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
@@ -374,6 +584,105 @@ const Admin = () => {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+          <CardHeader>
+            <CardTitle className="text-lg text-yellow-400">
+              User Access Controls
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="text-xs text-gray-300 uppercase tracking-wide">
+                Target Wallet
+              </div>
+              <Input
+                placeholder="Wallet address (0x…)"
+                value={manageUserAddress}
+                onChange={(event) => setManageUserAddress(event.target.value)}
+                className="input-bg border-gray-700 text-white"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                type="button"
+                className="bg-red-600 hover:bg-red-500 text-white font-semibold"
+                onClick={handleBlockUser}
+                disabled={!manageAddressIsValid || manageBusy}
+              >
+                {manageAction === "block" ? "Blocking…" : "Block User"}
+              </Button>
+              <Button
+                type="button"
+                className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold"
+                onClick={handleUnblockUser}
+                disabled={!manageAddressIsValid || manageBusy}
+              >
+                {manageAction === "unblock" ? "Unblocking…" : "Unblock User"}
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Blocking prevents a wallet from staking, compounding, or claiming
+              rewards until you unblock it again.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+          <CardHeader>
+            <CardTitle className="text-lg text-yellow-400">
+              Distribution Wallets
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleUpdateDistribution();
+              }}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {WALLET_FIELDS.map((field) => (
+                  <div key={field} className="space-y-2">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">
+                      {WALLET_LABEL_MAP[field]} Wallet
+                    </div>
+                    <Input
+                      value={walletInputs[field]}
+                      onChange={handleWalletChange(field)}
+                      placeholder="Wallet address (0x…)"
+                      className="input-bg border-gray-700 text-white"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={!canSubmitDistribution}
+                >
+                  {walletSubmitting ? "Updating…" : "Save Wallets"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-yellow-500/40 text-yellow-400"
+                  onClick={handleResetDistribution}
+                  disabled={walletSubmitting || !hasDistributionDefaults}
+                >
+                  Reset to On-Chain Values
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Update the wallets that receive community, treasury, marketing,
+                and liquidity distributions. Ensure each address is an ERC-20
+                compatible wallet.
+              </p>
+            </form>
           </CardContent>
         </Card>
 
