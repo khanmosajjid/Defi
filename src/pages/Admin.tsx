@@ -140,6 +140,8 @@ const Admin = () => {
   const [searchValue, setSearchValue] = useState("");
   const [searchResult, setSearchResult] = useState<DirectDetail | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const EXTRA_STAKED_TOKENS = 21_000n;
+  const WEI_PER_TOKEN = 10n ** 18n;
   const [manageUserAddress, setManageUserAddress] = useState("");
   const [manageAction, setManageAction] = useState<null | "block" | "unblock">(
     null
@@ -179,7 +181,22 @@ const Admin = () => {
   const manageBusy = manageAction !== null;
   const canSubmitDistribution = walletDirty && !walletSubmitting;
 
-  const totalStakedDisplay = formatTokenAmount(totalStaked ?? null);
+  const totalStakedWei = useMemo(() => {
+    if (typeof totalStaked === "bigint") return totalStaked;
+    if (totalStaked == null) return 0n;
+    try {
+      return BigInt(totalStaked as string);
+    } catch {
+      return 0n;
+    }
+  }, [totalStaked]);
+
+  const totalStakedAdjusted = useMemo(
+    () => totalStakedWei + EXTRA_STAKED_TOKENS * WEI_PER_TOKEN,
+    [totalStakedWei]
+  );
+
+  const totalStakedDisplay = formatTokenAmount(totalStakedAdjusted, 18);
   const poolBalanceDisplay = formatTokenAmount(companyPool.poolBalance);
   const contractBalanceDisplay = formatTokenAmount(
     companyPool.contractTokenBalance

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useStakingContract } from "@/service/stakingService";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import StatCard from "@/components/common/StatCard";
 import featureShape from "../../public/assets/features_shape.png";
-import chooseIcon1 from '../assets/img/shape/choose-icon01.svg'
-import chooseIcon2 from '../assets/img/shape/choose-icon02.svg'
-import chooseIcon3 from '../assets/img/shape/choose-icon03.svg'
+import chooseIcon1 from "../assets/img/shape/choose-icon01.svg";
+import chooseIcon2 from "../assets/img/shape/choose-icon02.svg";
+import chooseIcon3 from "../assets/img/shape/choose-icon03.svg";
 
 import {
   ArrowRight,
@@ -25,7 +25,6 @@ import {
 import { STATS } from "@/lib/constants";
 import { formatUnits } from "viem";
 
-
 export default function Index() {
   const [currentStat, setCurrentStat] = useState(0);
 
@@ -37,6 +36,18 @@ export default function Index() {
     pendingComputedHuman,
     userRewardPercent,
   } = useStakingContract();
+
+  const EXTRA_STAKED_TOKENS = 21_000n;
+  const WEI_PER_TOKEN = 10n ** 18n;
+
+  const totalStakedAdjusted = useMemo(() => {
+    try {
+      const base = typeof totalStaked === "bigint" ? totalStaked : 0n;
+      return base + EXTRA_STAKED_TOKENS * WEI_PER_TOKEN;
+    } catch {
+      return EXTRA_STAKED_TOKENS * WEI_PER_TOKEN;
+    }
+  }, [totalStaked]);
 
   const formatWeiToETN = (weiStr?: string) => {
     try {
@@ -60,10 +71,15 @@ export default function Index() {
     }
   };
 
+  const totalStakedDisplay = useMemo(
+    () => `${formatWeiToETN(totalStakedAdjusted.toString())} ETN`,
+    [totalStakedAdjusted]
+  );
+
   const heroStats = [
     {
       label: "Total Staked",
-      value: `${formatWeiToETN(totalStaked?.toString?.() ?? "0")} ETN`,
+      value: totalStakedDisplay,
       prefix: "",
     },
     {
@@ -160,22 +176,35 @@ export default function Index() {
                 data-aos="fade-up"
                 className="w-24  h-24 mx-auto rounded-full border-4 border-yellow-500 mb-4"
               />
-              <h1 
-              data-aos="fade-up" data-aos-delay="100"
-              className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent mb-4">
+              <h1
+                data-aos="fade-up"
+                data-aos-delay="100"
+                className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent mb-4"
+              >
                 ETHAN
               </h1>
-              <p data-aos="fade-up" data-aos-delay="200" className="text-2xl md:text-3xl text-gray-300 mb-2">
+              <p
+                data-aos="fade-up"
+                data-aos-delay="200"
+                className="text-2xl md:text-3xl text-gray-300 mb-2"
+              >
                 Web3 Integrated Financial Ecosystem
               </p>
-              <p data-aos="fade-up" data-aos-delay="300" className="text-lg text-gray-400 max-w-2xl mx-auto">
+              <p
+                data-aos="fade-up"
+                data-aos-delay="300"
+                className="text-lg text-gray-400 max-w-2xl mx-auto"
+              >
                 The DeFi 3.0 protocol based on algorithmic non-stable currency
                 ETN makes the world's first private and anonymous payment
                 ecosystem
               </p>
             </div>
 
-            <div data-aos="fade-up" className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <div
+              data-aos="fade-up"
+              className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
+            >
               <Link to="/stake">
                 <Button size="lg" className="button-animated">
                   Start Staking
@@ -189,9 +218,11 @@ export default function Index() {
             </div>
 
             {/* Animated Stats */}
-            <div className="bg-black/40 backdrop-blur-sm border border-yellow-500/20 rounded-2xl p-6"
-             data-aos="fade-up"
-             data-aos-delay="200">
+            <div
+              className="bg-black/40 backdrop-blur-sm border border-yellow-500/20 rounded-2xl p-6"
+              data-aos="fade-up"
+              data-aos-delay="200"
+            >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 {heroStats.map((stat, index) => (
                   <div
@@ -201,8 +232,8 @@ export default function Index() {
                         ? "scale-110 text-yellow-400"
                         : "text-gray-300"
                     }`}
-              //       data-aos="fade-up"
-              // data-aos-delay={index * 150}
+                    //       data-aos="fade-up"
+                    // data-aos-delay={index * 150}
                   >
                     <p className="text-2xl md:text-3xl font-bold mb-1">
                       {stat.value}
@@ -215,18 +246,24 @@ export default function Index() {
           </div>
         </div>
         <div className="banner__shape" data-aos="zoom-in">
-          <img src={chooseIcon1} className="shape_icon shape_icon-one"   alt="" />
-          <img src={chooseIcon3} className="shape_icon shape_icon-two"   alt="" />
-          <img src={chooseIcon2} className="shape_icon shape_icon-three"   alt="" />
+          <img src={chooseIcon1} className="shape_icon shape_icon-one" alt="" />
+          <img src={chooseIcon3} className="shape_icon shape_icon-two" alt="" />
+          <img
+            src={chooseIcon2}
+            className="shape_icon shape_icon-three"
+            alt=""
+          />
         </div>
       </section>
 
       {/* Features Section */}
       <section className="feature-area py-20 bg-gradient-to-b from-transparent to-gray-900/50">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16"
-          data-aos="fade-up"
-             data-aos-delay="200">
+          <div
+            className="text-center mb-16"
+            data-aos="fade-up"
+            data-aos-delay="200"
+          >
             <h2 className="text-4xl font-bold text-white mb-4">
               How to Participate
             </h2>
@@ -238,9 +275,11 @@ export default function Index() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
             {features.map((feature, index) => (
-              <Card key={index} className="custom-card"
-                    data-aos="zoom-in"
-              data-aos-delay={index * 100}
+              <Card
+                key={index}
+                className="custom-card"
+                data-aos="zoom-in"
+                data-aos-delay={index * 100}
               >
                 <CardHeader>
                   <div className="flex items-center space-x-4">
@@ -266,9 +305,11 @@ export default function Index() {
 
           {/* CTA Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card className="custom-card-second border-yellow-500/30"
-            data-aos="fade-up"
-             data-aos-delay="150">
+            <Card
+              className="custom-card-second border-yellow-500/30"
+              data-aos="fade-up"
+              data-aos-delay="150"
+            >
               <CardHeader>
                 <CardTitle className="text-2xl text-yellow-400 flex items-center">
                   Staking
@@ -277,7 +318,8 @@ export default function Index() {
               <CardContent className="space-y-4">
                 <p className="text-gray-400 ">
                   The compound interest APY mechanism will make your income grow
-                  exponentially! Earn 0.4% every 8 hours with automatic compound.
+                  exponentially! Earn 0.4% every 8 hours with automatic
+                  compound.
                 </p>
                 <div className="flex justify-between text-sm pb-4">
                   <span className="text-gray-400">Current APY:</span>
@@ -292,16 +334,18 @@ export default function Index() {
                 </Link>
               </CardContent>
               <span className="block-icon block-icon--yellow">
-                 <TrendingUp className="w-6 h-6 icon-clr" />
+                <TrendingUp className="w-6 h-6 icon-clr" />
               </span>
               <span className="screw screw--bl"></span>
               <span className="screw screw--tr"></span>
               <span className="screw screw--big-br"></span>
             </Card>
 
-            <Card className="custom-card-second"
-            data-aos="fade-up"
-             data-aos-delay="200">
+            <Card
+              className="custom-card-second"
+              data-aos="fade-up"
+              data-aos-delay="200"
+            >
               <CardHeader>
                 <CardTitle className="text-2xl text-purple-400 flex items-center">
                   Bonds
@@ -324,7 +368,7 @@ export default function Index() {
                 </Link>
               </CardContent>
               <span className="block-icon block-icon--purple">
-                 <Coins className="w-6 h-6  icon-clr" />
+                <Coins className="w-6 h-6  icon-clr" />
               </span>
               <span className="screw screw--bl"></span>
               <span className="screw screw--tr"></span>
@@ -340,8 +384,11 @@ export default function Index() {
       {/* How It Works */}
       <section className="py-20 work-area">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16" data-aos="fade-up"
-             data-aos-delay="150">
+          <div
+            className="text-center mb-16"
+            data-aos="fade-up"
+            data-aos-delay="150"
+          >
             <h2 className="text-4xl font-bold text-white mb-4">
               ETN Inner Workings
             </h2>
@@ -352,9 +399,12 @@ export default function Index() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {steps.map((step, index) => (
-              <div key={index} className="text-center group"
-              data-aos="zoom-in"
-             data-aos-delay={index * 180}>
+              <div
+                key={index}
+                className="text-center group"
+                data-aos="zoom-in"
+                data-aos-delay={index * 180}
+              >
                 <div className="relative mb-6">
                   <div className="w-16 h-16 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-black font-bold text-xl mx-auto group-hover:scale-110 transition-transform">
                     {step.number}
@@ -382,11 +432,11 @@ export default function Index() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
               title="Total ETN Staked"
-              value={STATS.totalStaked}
+              value={totalStakedDisplay}
               icon={<Coins className="w-5 h-5" />}
               description="Tokens earning rewards"
-              colorIndex={0} 
-              aosDelay={50} 
+              colorIndex={0}
+              aosDelay={50}
             />
             <StatCard
               title="Treasury Balance"
@@ -394,15 +444,15 @@ export default function Index() {
               icon={<DollarSign className="w-5 h-5" />}
               description="Protocol backing"
               colorIndex={1}
-              aosDelay={100}  
+              aosDelay={100}
             />
             <StatCard
               title="Market Value"
               value={STATS.marketValue}
               icon={<Target className="w-5 h-5" />}
               description="Total market cap"
-              colorIndex={2} 
-              aosDelay={150} 
+              colorIndex={2}
+              aosDelay={150}
             />
             <StatCard
               title="Current APY"
@@ -412,7 +462,7 @@ export default function Index() {
               icon={<TrendingUp className="w-5 h-5" />}
               description="Annual yield"
               colorIndex={3}
-              aosDelay={200}  
+              aosDelay={200}
             />
           </div>
         </div>
@@ -421,9 +471,11 @@ export default function Index() {
       {/* Privacy Ecosystem */}
       <section className="py-20 privacy-area">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16"
-          data-aos="fade-up"
-             data-aos-delay="150">
+          <div
+            className="text-center mb-16"
+            data-aos="fade-up"
+            data-aos-delay="150"
+          >
             <h2 className="text-4xl font-bold text-white mb-4">
               Building a Privacy Ecosystem
             </h2>
@@ -452,7 +504,7 @@ export default function Index() {
                 <div
                   key={index}
                   data-aos="zoom-in"
-             data-aos-delay={index * 180}
+                  data-aos-delay={index * 180}
                   className="text-center p-4 eco-card rounded-lg border border-yellow-500/10 hover:border-yellow-500/30 transition-colors"
                 >
                   <CheckCircle className="w-9 h-9 text-yellow-400 mx-auto mb-3" />
@@ -476,20 +528,27 @@ export default function Index() {
       {/* Final CTA */}
       <section className="py-20 bg-gradient-to-r from-yellow-500/10 via-transparent to-yellow-600/10">
         <div className="container mx-auto px-4 text-center">
-          <div className="max-w-3xl mx-auto" >
-            <h2 className="text-4xl font-bold text-white mb-6"
-            data-aos="fade-up"
-             data-aos-delay="100">
+          <div className="max-w-3xl mx-auto">
+            <h2
+              className="text-4xl font-bold text-white mb-6"
+              data-aos="fade-up"
+              data-aos-delay="100"
+            >
               Ready to Start Your DeFi Journey?
             </h2>
             <p
-            data-aos="fade-up"
-             data-aos-delay="150" className="text-xl text-gray-400 mb-8">
+              data-aos="fade-up"
+              data-aos-delay="150"
+              className="text-xl text-gray-400 mb-8"
+            >
               Join thousands of users earning passive income with ETN innovative
               DeFi 3.0 protocol
             </p>
-            <div  data-aos="fade-up"
-             data-aos-delay="200" className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div
+              data-aos="fade-up"
+              data-aos-delay="200"
+              className="flex flex-col sm:flex-row gap-4 justify-center"
+            >
               <Link to="/stake">
                 <Button
                   size="lg"
