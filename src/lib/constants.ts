@@ -64,8 +64,8 @@ export const TOKEN_INFO = {
 
 //mainnet
 export const CONTRACT_ADDRESSES = {
-  stakingPlatform: '0x3F5e5dCdC737f751881ef60Ed3bcDF82f3de5466',
-  token: '0xE1a2EC79D7b56D13DE7b6dDcfc97004b23A33ff0',
+  stakingPlatform: '0xC83D8dd6A46654b8785869B617bDdBEe9623d450',
+  token: '0xD9A7410bcd67E038422A0FF5a1a76F450C7395b5',
 } as const;
 
 //testnet PancakeSwap V2 Addresses

@@ -690,7 +690,7 @@ export default function Stake() {
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                       {/* ETN -> USDT swap (simple one-off) */}
-                      <div className="mt-6 p-4 input-bg rounded-lg">
+                      {/* <div className="mt-6 p-4 input-bg rounded-lg">
                         <h4 className="text-sm text-gray-300 mb-3">
                           Convert ETN → USDT
                         </h4>
@@ -817,7 +817,7 @@ export default function Stake() {
                             </Button>
                           </div>
                         </div>
-                      </div>
+                      </div> */}
                     </div>
                   </TabsContent>
 

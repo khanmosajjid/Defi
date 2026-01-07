@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,29 +14,6 @@ import {
 import CONTRACT_ABI from "@/service/stakingABI.json";
 
 const PAGE_SIZE = 25;
-
-const EMPTY_WALLET_STATE = {
-  community: "",
-  treasury: "",
-  marketing: "",
-  liquidity: "",
-} as const;
-
-type WalletField = keyof typeof EMPTY_WALLET_STATE;
-
-const WALLET_FIELDS: WalletField[] = [
-  "community",
-  "treasury",
-  "marketing",
-  "liquidity",
-];
-
-const WALLET_LABEL_MAP: Record<WalletField, string> = {
-  community: "Community",
-  treasury: "Treasury",
-  marketing: "Marketing",
-  liquidity: "Liquidity",
-};
 
 function formatTokenAmount(
   value?: string | bigint | null,
@@ -85,38 +61,6 @@ const Admin = () => {
     return ownerAddress.toLowerCase() === connectedAddress.toLowerCase();
   }, [connectedAddress, ownerAddress]);
 
-  const { data: communityWalletData, refetch: refetchCommunityWallet } =
-    useReadContract({
-      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
-      abi: CONTRACT_ABI,
-      functionName: "communityWallet",
-      query: { enabled: isAdmin },
-    });
-
-  const { data: treasuryWalletData, refetch: refetchTreasuryWallet } =
-    useReadContract({
-      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
-      abi: CONTRACT_ABI,
-      functionName: "treasuryWallet",
-      query: { enabled: isAdmin },
-    });
-
-  const { data: marketingWalletData, refetch: refetchMarketingWallet } =
-    useReadContract({
-      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
-      abi: CONTRACT_ABI,
-      functionName: "marketingWallet",
-      query: { enabled: isAdmin },
-    });
-
-  const { data: liquidityWalletData, refetch: refetchLiquidityWallet } =
-    useReadContract({
-      address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
-      abi: CONTRACT_ABI,
-      functionName: "liquidityWallet",
-      query: { enabled: isAdmin },
-    });
-
   const {
     totalStaked,
     fetchUsersBatch,
@@ -124,7 +68,7 @@ const Admin = () => {
     fetchCompanyPoolStatus,
     blockUser: blockUserOnChain,
     unblockUser: unblockUserOnChain,
-    setDistributionWallets: updateDistributionWallets,
+    fetchUserRoiHistory,
   } = useStakingContract();
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -140,46 +84,24 @@ const Admin = () => {
   const [searchValue, setSearchValue] = useState("");
   const [searchResult, setSearchResult] = useState<DirectDetail | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  const EXTRA_STAKED_TOKENS = 21_000n;
-  const WEI_PER_TOKEN = 10n ** 18n;
   const [manageUserAddress, setManageUserAddress] = useState("");
   const [manageAction, setManageAction] = useState<null | "block" | "unblock">(
     null
   );
-  const [walletInputs, setWalletInputs] = useState({ ...EMPTY_WALLET_STATE });
-  const [walletDirty, setWalletDirty] = useState(false);
-  const [walletSubmitting, setWalletSubmitting] = useState(false);
+  const [exportingUsers, setExportingUsers] = useState(false);
+  const [exportPayload, setExportPayload] = useState<string | null>(null);
+  const [copyingExport, setCopyingExport] = useState(false);
+  const [roiHistory, setRoiHistory] = useState<
+    Array<{ day: number; timestamp: number; amount: string }>
+  >([]);
+  const [roiLoading, setRoiLoading] = useState(false);
+  const [roiError, setRoiError] = useState<string | null>(null);
 
   const manageAddressIsValid = useMemo(
     () => Boolean(normalizeAddress(manageUserAddress)),
     [manageUserAddress]
   );
-
-  const toAddressString = (value: unknown) =>
-    typeof value === "string" ? value : value ? String(value) : "";
-
-  const distributionDefaults = useMemo(
-    () => ({
-      community: toAddressString(communityWalletData),
-      treasury: toAddressString(treasuryWalletData),
-      marketing: toAddressString(marketingWalletData),
-      liquidity: toAddressString(liquidityWalletData),
-    }),
-    [
-      communityWalletData,
-      treasuryWalletData,
-      marketingWalletData,
-      liquidityWalletData,
-    ]
-  );
-
-  const hasDistributionDefaults = useMemo(
-    () => Object.values(distributionDefaults).some((value) => value.length > 0),
-    [distributionDefaults]
-  );
-
   const manageBusy = manageAction !== null;
-  const canSubmitDistribution = walletDirty && !walletSubmitting;
 
   const totalStakedWei = useMemo(() => {
     if (typeof totalStaked === "bigint") return totalStaked;
@@ -191,12 +113,7 @@ const Admin = () => {
     }
   }, [totalStaked]);
 
-  const totalStakedAdjusted = useMemo(
-    () => totalStakedWei + EXTRA_STAKED_TOKENS * WEI_PER_TOKEN,
-    [totalStakedWei]
-  );
-
-  const totalStakedDisplay = formatTokenAmount(totalStakedAdjusted, 18);
+  const totalStakedDisplay = formatTokenAmount(totalStakedWei, 18);
   const poolBalanceDisplay = formatTokenAmount(companyPool.poolBalance);
   const contractBalanceDisplay = formatTokenAmount(
     companyPool.contractTokenBalance
@@ -210,25 +127,58 @@ const Admin = () => {
       setCompanyPool({ poolBalance: "0", contractTokenBalance: "0" });
       setManageUserAddress("");
       setManageAction(null);
-      setWalletInputs({ ...EMPTY_WALLET_STATE });
-      setWalletDirty(false);
-      setWalletSubmitting(false);
+      setSearchResult(null);
+      setExportPayload(null);
+      setRoiHistory([]);
+      setRoiError(null);
+      setRoiLoading(false);
     }
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    if (walletDirty) return;
-    setWalletInputs((prev) => {
-      const matches =
-        prev.community === distributionDefaults.community &&
-        prev.treasury === distributionDefaults.treasury &&
-        prev.marketing === distributionDefaults.marketing &&
-        prev.liquidity === distributionDefaults.liquidity;
-      if (matches) return prev;
-      return { ...distributionDefaults };
-    });
-  }, [distributionDefaults, isAdmin, walletDirty]);
+    if (!isAdmin) {
+      setRoiHistory([]);
+      setRoiError(null);
+      setRoiLoading(false);
+      return;
+    }
+    if (!searchResult) {
+      setRoiHistory([]);
+      setRoiError(null);
+      setRoiLoading(false);
+      return;
+    }
+    const normalized = normalizeAddress(searchResult.address);
+    if (!normalized) {
+      setRoiHistory([]);
+      setRoiError("Invalid wallet address");
+      setRoiLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRoiLoading(true);
+    setRoiError(null);
+
+    fetchUserRoiHistory(normalized as `0x${string}`)
+      .then((history) => {
+        if (cancelled) return;
+        setRoiHistory(history);
+      })
+      .catch((error) => {
+        console.error("fetchUserRoiHistory failed", error);
+        if (cancelled) return;
+        setRoiHistory([]);
+        setRoiError("Failed to load ROI history");
+      })
+      .finally(() => {
+        if (!cancelled) setRoiLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchUserRoiHistory, isAdmin, searchResult]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -298,21 +248,6 @@ const Admin = () => {
     }
   };
 
-  const handleWalletChange =
-    (field: WalletField) => (event: ChangeEvent<HTMLInputElement>) => {
-      const { value } = event.target;
-      setWalletInputs((prev) => {
-        const next = { ...prev, [field]: value };
-        const matchesDefaults =
-          next.community === distributionDefaults.community &&
-          next.treasury === distributionDefaults.treasury &&
-          next.marketing === distributionDefaults.marketing &&
-          next.liquidity === distributionDefaults.liquidity;
-        setWalletDirty(!matchesDefaults);
-        return next;
-      });
-    };
-
   const handleBlockUser = async () => {
     const normalized = normalizeAddress(manageUserAddress);
     if (!normalized) {
@@ -347,49 +282,86 @@ const Admin = () => {
     }
   };
 
-  const handleUpdateDistribution = async () => {
-    const normalizedValues = {} as Record<WalletField, string>;
-
-    for (const field of WALLET_FIELDS) {
-      const normalized = normalizeAddress(walletInputs[field]);
-      if (!normalized) {
-        toast.error(`Enter a valid ${WALLET_LABEL_MAP[field]} wallet address`);
-        return;
-      }
-      normalizedValues[field] = normalized;
+  const handleRefreshRoiHistory = async () => {
+    if (!searchResult) return;
+    const normalized = normalizeAddress(searchResult.address);
+    if (!normalized) {
+      setRoiHistory([]);
+      setRoiError("Invalid wallet address");
+      return;
     }
 
-    setWalletSubmitting(true);
+    setRoiLoading(true);
+    setRoiError(null);
     try {
-      await updateDistributionWallets({
-        community: normalizedValues.community as `0x${string}`,
-        treasury: normalizedValues.treasury as `0x${string}`,
-        marketing: normalizedValues.marketing as `0x${string}`,
-        liquidity: normalizedValues.liquidity as `0x${string}`,
-      });
-      setWalletInputs({
-        community: normalizedValues.community,
-        treasury: normalizedValues.treasury,
-        marketing: normalizedValues.marketing,
-        liquidity: normalizedValues.liquidity,
-      });
-      setWalletDirty(false);
-      await Promise.allSettled([
-        refetchCommunityWallet(),
-        refetchTreasuryWallet(),
-        refetchMarketingWallet(),
-        refetchLiquidityWallet(),
-      ]);
+      const history = await fetchUserRoiHistory(normalized as `0x${string}`);
+      setRoiHistory(history);
     } catch (error) {
-      console.error("updateDistributionWallets failed", error);
+      console.error("handleRefreshRoiHistory failed", error);
+      setRoiHistory([]);
+      setRoiError("Failed to load ROI history");
     } finally {
-      setWalletSubmitting(false);
+      setRoiLoading(false);
     }
   };
 
-  const handleResetDistribution = () => {
-    setWalletInputs({ ...distributionDefaults });
-    setWalletDirty(false);
+  const handleExportCalldata = async () => {
+    if (exportingUsers) return;
+    setExportingUsers(true);
+    try {
+      const aggregated: DirectDetail[] = [];
+      let offset = 0;
+      let expectedTotal: number | null = null;
+
+      while (true) {
+        const page = await fetchUsersBatch(offset, PAGE_SIZE);
+        if (expectedTotal == null) {
+          expectedTotal = page.total;
+        }
+        if (!page.items.length) break;
+        aggregated.push(...page.items);
+        offset += page.items.length;
+        if (expectedTotal != null && aggregated.length >= expectedTotal) {
+          break;
+        }
+        if (page.items.length < PAGE_SIZE) {
+          break;
+        }
+      }
+
+      const payload = {
+        users_: aggregated.map((entry) => entry.address),
+        selfStaked_: aggregated.map((entry) => entry.selfStaked ?? "0"),
+        referrers_: aggregated.map(
+          (entry) =>
+            entry.referrer ?? "0x0000000000000000000000000000000000000000"
+        ),
+        lastAccruedAt_: aggregated.map((entry) => entry.lastAccruedAt ?? "0"),
+        directs_: aggregated.map((entry) => entry.directs.toString()),
+      };
+
+      setExportPayload(JSON.stringify(payload, null, 2));
+      toast.success("Calldata arrays ready");
+    } catch (error) {
+      console.error("handleExportCalldata failed", error);
+      toast.error("Failed to build calldata arrays");
+    } finally {
+      setExportingUsers(false);
+    }
+  };
+
+  const handleCopyExportPayload = async () => {
+    if (!exportPayload || copyingExport) return;
+    try {
+      setCopyingExport(true);
+      await navigator.clipboard.writeText(exportPayload);
+      toast.success("Copied calldata arrays");
+    } catch (error) {
+      console.error("copy export payload failed", error);
+      toast.error("Failed to copy arrays");
+    } finally {
+      setCopyingExport(false);
+    }
   };
 
   const pageStart = totalUsers === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
@@ -598,11 +570,90 @@ const Admin = () => {
                       </span>
                     </div>
                   )}
+                  <div className="flex justify-between">
+                    <span>Referrer</span>
+                    <span
+                      className="text-yellow-300 font-medium"
+                      title={searchResult.referrer}
+                    >
+                      {searchResult.referrerShort}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Last Accrued</span>
+                    <span className="text-yellow-300 font-medium">
+                      {searchResult.lastAccruedAt ?? "0"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Directs</span>
+                    <span className="text-yellow-300 font-medium">
+                      {searchResult.directs.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
+
+        {searchResult && (
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-lg text-yellow-400">
+                ROI History
+              </CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-yellow-500/40 text-yellow-400"
+                onClick={handleRefreshRoiHistory}
+                disabled={roiLoading}
+              >
+                {roiLoading ? "Loading…" : "Refresh"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {roiError ? (
+                <p className="text-sm text-red-400">{roiError}</p>
+              ) : roiLoading ? (
+                <p className="text-sm text-gray-400">Loading ROI history…</p>
+              ) : roiHistory.length === 0 ? (
+                <p className="text-sm text-gray-400">No ROI history entries.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-400 border-b border-gray-800">
+                        <th className="py-2 pr-4">Day</th>
+                        <th className="py-2 pr-4">Timestamp (s)</th>
+                        <th className="py-2">Amount (ETN)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roiHistory.map((entry, index) => (
+                        <tr
+                          key={`${entry.day}-${entry.timestamp}-${index}`}
+                          className="border-b border-gray-900/80"
+                        >
+                          <td className="py-3 pr-4 text-gray-200">
+                            {entry.day}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-200">
+                            {entry.timestamp}
+                          </td>
+                          <td className="py-3 text-yellow-200">
+                            {formatTokenAmount(entry.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
           <CardHeader>
@@ -649,69 +700,25 @@ const Admin = () => {
 
         <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
           <CardHeader>
-            <CardTitle className="text-lg text-yellow-400">
-              Distribution Wallets
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                handleUpdateDistribution();
-              }}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {WALLET_FIELDS.map((field) => (
-                  <div key={field} className="space-y-2">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">
-                      {WALLET_LABEL_MAP[field]} Wallet
-                    </div>
-                    <Input
-                      value={walletInputs[field]}
-                      onChange={handleWalletChange(field)}
-                      placeholder="Wallet address (0x…)"
-                      className="input-bg border-gray-700 text-white"
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-lg text-yellow-400">
+                Registered Users
+              </CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                <div className="text-xs text-gray-400">
+                  {totalUsers === 0
+                    ? "No users registered."
+                    : `Showing ${pageStart}-${pageEnd} of ${totalUsers.toLocaleString()} users`}
+                </div>
                 <Button
-                  type="submit"
-                  className="bg-yellow-500 text-black font-semibold"
-                  disabled={!canSubmitDistribution}
-                >
-                  {walletSubmitting ? "Updating…" : "Save Wallets"}
-                </Button>
-                <Button
-                  type="button"
                   variant="outline"
                   className="border-yellow-500/40 text-yellow-400"
-                  onClick={handleResetDistribution}
-                  disabled={walletSubmitting || !hasDistributionDefaults}
+                  disabled={exportingUsers || totalUsers === 0}
+                  onClick={handleExportCalldata}
                 >
-                  Reset to On-Chain Values
+                  {exportingUsers ? "Building…" : "Build calldata arrays"}
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">
-                Update the wallets that receive community, treasury, marketing,
-                and liquidity distributions. Ensure each address is an ERC-20
-                compatible wallet.
-              </p>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-lg text-yellow-400">
-              Registered Users
-            </CardTitle>
-            <div className="text-xs text-gray-400">
-              {totalUsers === 0
-                ? "No users registered."
-                : `Showing ${pageStart}-${pageEnd} of ${totalUsers.toLocaleString()} users`}
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -719,6 +726,9 @@ const Admin = () => {
               <thead>
                 <tr className="text-left text-gray-400 border-b border-gray-800">
                   <th className="py-2 pr-4">Address</th>
+                  <th className="py-2 pr-4">Referrer</th>
+                  <th className="py-2 pr-4">Directs</th>
+                  <th className="py-2 pr-4">Last Accrued</th>
                   <th className="py-2 pr-4">Level</th>
                   <th className="py-2 pr-4">Rank</th>
                   <th className="py-2 pr-4">Self Staked (ETN)</th>
@@ -731,13 +741,13 @@ const Admin = () => {
               <tbody>
                 {tableLoading ? (
                   <tr>
-                    <td colSpan={8} className="py-6 text-center text-gray-500">
+                    <td colSpan={11} className="py-6 text-center text-gray-500">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-6 text-center text-gray-500">
+                    <td colSpan={11} className="py-6 text-center text-gray-500">
                       No users found.
                     </td>
                   </tr>
@@ -756,6 +766,18 @@ const Admin = () => {
                       >
                         <td className="py-3 pr-4 text-yellow-300 break-all">
                           {user.address}
+                        </td>
+                        <td
+                          className="py-3 pr-4 text-gray-200 break-all"
+                          title={user.referrer}
+                        >
+                          {user.referrerShort}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-200">
+                          {user.directs.toLocaleString()}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-200">
+                          {user.lastAccruedAt ?? "0"}
                         </td>
                         <td className="py-3 pr-4 text-gray-200">
                           {user.level || "-"}
@@ -809,6 +831,27 @@ const Admin = () => {
                 </Button>
               </div>
             </div>
+            {exportPayload && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">
+                    Calldata Arrays
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-yellow-500/40 text-yellow-400"
+                    onClick={handleCopyExportPayload}
+                    disabled={copyingExport}
+                  >
+                    {copyingExport ? "Copying…" : "Copy JSON"}
+                  </Button>
+                </div>
+                <pre className="mt-2 max-h-64 overflow-auto rounded border border-yellow-500/20 bg-gray-950/60 p-3 text-xs text-yellow-200">
+                  {exportPayload}
+                </pre>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

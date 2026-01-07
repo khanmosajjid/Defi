@@ -16,6 +16,11 @@ const ERC20_ABI = [
     { constant: false, inputs: [{ name: '_spender', type: 'address' }, { name: '_value', type: 'uint256' }], name: 'approve', outputs: [{ name: 'success', type: 'bool' }], type: 'function' },
 ];
 
+const UNISWAP_V2_PAIR_ABI = [
+    { inputs: [], name: 'token0', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+    { inputs: [], name: 'token1', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+] as const;
+
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`;
 const TOKEN_ADDRESS = CONTRACT_ADDRESSES.token as `0x${string}`;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -112,13 +117,10 @@ export type DirectDetail = {
     referralIncome: string;
     totalReferralIncome?: string;
     rank?: number;
-};
-
-type DistributionWalletsConfig = {
-    community: `0x${string}`;
-    treasury: `0x${string}`;
-    marketing: `0x${string}`;
-    liquidity: `0x${string}`;
+    referrer: string;
+    referrerShort: string;
+    lastAccruedAt: string;
+    directs: number;
 };
 
 type HistoryEntry = {
@@ -137,6 +139,10 @@ function buildEmptyDirectDetail(address: string): DirectDetail {
         level: 0,
         referralIncome: '0',
         totalReferralIncome: '0',
+        referrer: ZERO_ADDRESS,
+        referrerShort: shortenAddress(ZERO_ADDRESS),
+        lastAccruedAt: '0',
+        directs: 0,
     } satisfies DirectDetail;
 }
 
@@ -273,10 +279,9 @@ export function useStakingContract() {
     }
 
     const { data: totalStakedRaw, refetch: refetchTotalStaked } = useReadContract({
-        address: TOKEN_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: 'balanceOf',
-        args: [CONTRACT_ADDRESS],
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'totalStaked',
     });
 
     const { data: userInfoRaw, refetch: refetchUserInfo } = useReadContract({
@@ -287,23 +292,43 @@ export function useStakingContract() {
         query: { enabled: Boolean(viewingAddress) },
     });
 
-    const { data: manualTokenPriceRaw } = useReadContract({
+    const { data: twapPriceRaw } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
-        functionName: 'manualTokenPrice',
+        functionName: 'twapPrice18',
     });
 
-    const { data: tokenPricePerTokenRaw, refetch: refetchTokenPrice } = useReadContract({
+    const { data: pricePairRaw } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
-        functionName: 'tokenToUsd18',
-        args: [ONE_TOKEN],
+        functionName: 'pricePair',
+    });
+
+    const pricePairAddress = useMemo(() => {
+        const value = (pricePairRaw ?? ZERO_ADDRESS) as string;
+        if (!value || value.toLowerCase() === ZERO_ADDRESS.toLowerCase()) return undefined;
+        if (!value.startsWith('0x') || value.length !== 42) return undefined;
+        return value as `0x${string}`;
+    }, [pricePairRaw]);
+
+    const { data: pairToken0Raw } = useReadContract({
+        address: pricePairAddress,
+        abi: UNISWAP_V2_PAIR_ABI,
+        functionName: 'token0',
+        query: { enabled: Boolean(pricePairAddress) },
+    });
+
+    const { data: pairToken1Raw } = useReadContract({
+        address: pricePairAddress,
+        abi: UNISWAP_V2_PAIR_ABI,
+        functionName: 'token1',
+        query: { enabled: Boolean(pricePairAddress) },
     });
 
     const { data: dailyRateRaw } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
-        functionName: 'dailyRate',
+        functionName: 'DAILY_RATE',
     });
 
     const { data: tokenBalanceRaw, refetch: refetchTokenBalance } = useReadContract({
@@ -322,10 +347,10 @@ export function useStakingContract() {
         query: { enabled: Boolean(viewingAddress) },
     });
 
-    const { data: userReportRaw, refetch: refetchUserReport } = useReadContract({
+    const { data: pendingRewardRaw, refetch: refetchPendingReward } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
-        functionName: 'getUserReport',
+        functionName: 'pendingReward',
         args: [viewingAddress],
         query: { enabled: Boolean(viewingAddress) },
     });
@@ -333,7 +358,12 @@ export function useStakingContract() {
     const userInfo = useMemo(() => {
         if (!userInfoRaw) return null;
         const arr = userInfoRaw as unknown[];
-        const levelRaw = extractString(arr[8]) ?? '0';
+        const selfStaked = extractString(arr[0]) ?? '0';
+        const activeBondPrincipal = extractString(arr[1]) ?? '0';
+        const lastAccruedAt = extractString(arr[2]) ?? '0';
+        const referrer = (arr[3] as string) ?? ZERO_ADDRESS;
+        const directsValue = Number(extractString(arr[4]) ?? '0');
+        const levelRaw = extractString(arr[5]) ?? '0';
         let level = 0;
         try {
             const lvl = BigInt(levelRaw);
@@ -341,54 +371,54 @@ export function useStakingContract() {
         } catch {
             level = 0;
         }
-        const rankValue = Number(extractString(arr[9]) ?? '0');
+        const rankValue = Number(extractString(arr[6]) ?? '0');
+        const totalEarned = extractString(arr[7]) ?? '0';
+        const totalWithdrawn = extractString(arr[8]) ?? '0';
+        const totalReferralIncome = extractString(arr[9]) ?? '0';
+
         return {
-            originalStaked: extractString(arr[0]) ?? '0',
-            originalUsdLocked: extractString(arr[1]) ?? '0',
-            selfStaked: extractString(arr[2]) ?? '0',
-            selfStakedUsdLocked: extractString(arr[3]) ?? '0',
-            activeBondValue: extractString(arr[4]) ?? '0',
-            lastAccruedAt: extractString(arr[5]) ?? '0',
-            referrer: (arr[6] as string) ?? ZERO_ADDRESS,
-            referrerShort: shortenAddress(arr[6] as string),
-            directs: Number(extractString(arr[7]) ?? '0'),
+            selfStaked,
+            activeBondValue: activeBondPrincipal,
+            lastAccruedAt,
+            referrer,
+            referrerShort: shortenAddress(referrer),
+            directs: Number.isNaN(directsValue) ? 0 : directsValue,
             level,
             rank: rankValue,
             rankName: getRankName(rankValue),
-            totalRoiEarned: extractString(arr[10]) ?? '0',
-            totalLevelRewardEarned: extractString(arr[11]) ?? '0',
-            totalReferralIncome: extractString(arr[12]) ?? '0',
-            totalWithdrawn: extractString(arr[13]) ?? '0',
+            totalRoiEarned: totalEarned,
+            totalLevelRewardEarned: '0',
+            totalReferralIncome,
+            totalWithdrawn,
         };
     }, [userInfoRaw]);
 
     const userReport = useMemo(() => {
-        if (!userReportRaw && !userInfo) return null;
-        const arr = (userReportRaw as unknown[]) || [];
-        const pendingRoi = extractString(arr[0]) ?? '0';
-        const stakeWithAccrued = extractString(arr[1]) ?? userInfo?.selfStaked ?? '0';
-        const usdStakedLive = extractString(arr[2]) ?? '0';
-        const levelRaw = extractString(arr[3]) ?? '0';
-        let displayLevel = userInfo?.level ?? 0;
+        if (!userInfo && pendingRewardRaw == null) return null;
+        const pendingRoi = extractString(pendingRewardRaw) ?? '0';
+        let stakeWithAccrued = userInfo?.selfStaked ?? '0';
         try {
-            const lvl = BigInt(levelRaw);
-            if (lvl !== 255n) displayLevel = Number(lvl);
+            const base = BigInt(userInfo?.selfStaked ?? '0');
+            const bond = BigInt(userInfo?.activeBondValue ?? '0');
+            const pending = BigInt(pendingRoi);
+            stakeWithAccrued = (base + bond + pending).toString();
         } catch {
-            // ignore parse errors
+            // silently fall back to self stake amount
         }
+
         return {
             pendingRoi,
             stakeWithAccrued,
-            usdStakedLive,
-            displayLevel,
-            bondCount: Number(extractString(arr[4]) ?? '0'),
-            roiHistoryCount: Number(extractString(arr[5]) ?? '0'),
+            usdStakedLive: '0',
+            displayLevel: userInfo?.level ?? 0,
+            bondCount: 0,
+            roiHistoryCount: 0,
             totalRoiEarned: userInfo?.totalRoiEarned ?? '0',
             totalLevelRewardEarned: userInfo?.totalLevelRewardEarned ?? '0',
             totalReferralIncome: userInfo?.totalReferralIncome ?? '0',
             totalWithdrawn: userInfo?.totalWithdrawn ?? '0',
         };
-    }, [userReportRaw, userInfo]);
+    }, [pendingRewardRaw, userInfo]);
 
     const userLevel = userReport?.displayLevel ?? userInfo?.level ?? 0;
     const userRank = userInfo?.rank ?? 0;
@@ -421,11 +451,32 @@ export function useStakingContract() {
         }
         : null;
 
-    const tokenPriceUsd = (() => {
-        const fromOracle = tokenPricePerTokenRaw ? tokenPricePerTokenRaw.toString() : '0';
-        if (fromOracle !== '0') return fromOracle;
-        return manualTokenPriceRaw ? manualTokenPriceRaw.toString() : '0';
-    })();
+    const tokenPriceUsd = useMemo(() => {
+        if (twapPriceRaw == null) return '0';
+        try {
+            const price = BigInt(twapPriceRaw as bigint);
+            if (price <= 0n) return '0';
+
+            const stakingLower = TOKEN_ADDRESS.toLowerCase();
+            const token0 = typeof pairToken0Raw === 'string' ? pairToken0Raw.toLowerCase() : undefined;
+            const token1 = typeof pairToken1Raw === 'string' ? pairToken1Raw.toLowerCase() : undefined;
+
+            if (token0 === stakingLower) {
+                return price.toString();
+            }
+
+            if (token1 === stakingLower) {
+                if (price === 0n) return '0';
+                const inverted = (ONE_TOKEN * ONE_TOKEN) / price;
+                return inverted.toString();
+            }
+
+            return price.toString();
+        } catch (error) {
+            console.error('tokenPriceUsd compute failed', error);
+            return '0';
+        }
+    }, [pairToken0Raw, pairToken1Raw, twapPriceRaw]);
 
     const pendingRewards = userReport?.pendingRoi ?? '0';
     const pendingRewardsHuman = formatUnits(pendingRewards, 18);
@@ -451,16 +502,16 @@ export function useStakingContract() {
 
     const tokenBalance = tokenBalanceRaw ? tokenBalanceRaw.toString() : '0';
     const tokenAllowance = tokenAllowanceRaw ? tokenAllowanceRaw.toString() : '0';
-    const manualTokenPrice = manualTokenPriceRaw ? manualTokenPriceRaw.toString() : '0';
+    const manualTokenPrice = tokenPriceUsd;
 
     const refetchPendingRewards = useCallback(async () => {
         try {
-            return await refetchUserReport?.();
+            return await refetchPendingReward?.();
         } catch (error) {
             console.error('refetchPendingRewards failed', error);
             return null;
         }
-    }, [refetchUserReport]);
+    }, [refetchPendingReward]);
 
     async function ensureAllowance(amountWei: bigint) {
         let allowanceStr = tokenAllowance;
@@ -550,27 +601,8 @@ export function useStakingContract() {
     }
 
     async function claimRoi() {
-        const txToast = toast.loading('Claiming ROI rewards...');
-        try {
-            const receipt = await writeAndWaitForReceipt({
-                abi: CONTRACT_ABI as Abi,
-                address: CONTRACT_ADDRESS,
-                functionName: 'claimRoi',
-                args: [],
-            });
-            toast.success('ROI claimed successfully', { id: txToast });
-            await Promise.allSettled([
-                refetchTokenBalance(),
-                refetchUserInfo(),
-                refetchPendingRewards(),
-                refetchTotalStaked(),
-            ]);
-            return receipt;
-        } catch (err) {
-            console.error('claimRoi error', err);
-            toast.error(getErrorMessage(err), { id: txToast });
-            throw err;
-        }
+        toast.error('Direct ROI claim is no longer supported; rewards auto-compound.');
+        throw new Error('ROI claim not supported by current contract');
     }
 
     const fetchBondPlans = useCallback(async () => {
@@ -749,31 +781,13 @@ export function useStakingContract() {
             const receipt = await writeAndWaitForReceipt({
                 abi: CONTRACT_ABI as Abi,
                 address: CONTRACT_ADDRESS,
-                functionName: 'unBlockUser',
+                functionName: 'unblockUser',
                 args: [target],
             });
             toast.success('User unblocked successfully', { id: txToast });
             return receipt;
         } catch (err) {
             console.error('unblockUser error', err);
-            toast.error(getErrorMessage(err), { id: txToast });
-            throw err;
-        }
-    }
-
-    async function setDistributionWalletsOnChain(wallets: DistributionWalletsConfig) {
-        const txToast = toast.loading('Updating distribution wallets...');
-        try {
-            const receipt = await writeAndWaitForReceipt({
-                abi: CONTRACT_ABI as Abi,
-                address: CONTRACT_ADDRESS,
-                functionName: 'setDistributionWallets',
-                args: [wallets.community, wallets.treasury, wallets.marketing, wallets.liquidity],
-            });
-            toast.success('Distribution wallets updated', { id: txToast });
-            return receipt;
-        } catch (err) {
-            console.error('setDistributionWallets error', err);
             toast.error(getErrorMessage(err), { id: txToast });
             throw err;
         }
@@ -798,7 +812,7 @@ export function useStakingContract() {
 
     const getMemberDetail = useCallback(async (addr: `0x${string}`): Promise<DirectDetail> => {
         try {
-            const [infoRaw, reportRaw] = await Promise.all([
+            const [infoRaw, pendingRaw] = await Promise.all([
                 readContractSafe<unknown[]>({
                     address: CONTRACT_ADDRESS,
                     abi: CONTRACT_ABI,
@@ -806,20 +820,27 @@ export function useStakingContract() {
                     args: [addr],
                     chainId: supportedChainId,
                 }),
-                readContractSafe<unknown[]>({
+                readContractSafe<unknown>({
                     address: CONTRACT_ADDRESS,
                     abi: CONTRACT_ABI,
-                    functionName: 'getUserReport',
+                    functionName: 'pendingReward',
                     args: [addr],
                     chainId: supportedChainId,
                 }),
             ]);
+
             const infoArr = Array.isArray(infoRaw) ? infoRaw : [];
-            const reportArr = Array.isArray(reportRaw) ? reportRaw : [];
-            const selfStaked = extractString(infoArr[2]) ?? '0';
-            const stakeWithAccrued = extractString(reportArr[1]) ?? selfStaked;
-            const pendingRoi = extractString(reportArr[0]) ?? '0';
-            const levelRaw = extractString(infoArr[8]) ?? '0';
+            const selfStaked = extractString(infoArr[0]) ?? '0';
+            const activeBond = extractString(infoArr[1]) ?? '0';
+            const pendingRoi = extractString(pendingRaw) ?? '0';
+            let stakeWithAccrued = selfStaked;
+            try {
+                stakeWithAccrued = (BigInt(selfStaked) + BigInt(activeBond ?? '0') + BigInt(pendingRoi)).toString();
+            } catch {
+                // ignore conversion errors
+            }
+
+            const levelRaw = extractString(infoArr[5]) ?? '0';
             let level = 0;
             try {
                 const lvl = BigInt(levelRaw);
@@ -827,9 +848,14 @@ export function useStakingContract() {
             } catch {
                 level = 0;
             }
-            const rankRaw = extractString(infoArr[9]) ?? '0';
+            const rankRaw = extractString(infoArr[6]) ?? '0';
             const rank = Number(rankRaw);
-            const totalReferralIncome = extractString(infoArr[12]) ?? '0';
+            const totalReferralIncome = extractString(infoArr[9]) ?? '0';
+            const lastAccruedAt = extractString(infoArr[2]) ?? '0';
+            const referrer = (infoArr[3] as string) ?? ZERO_ADDRESS;
+            const directsParsed = Number(extractString(infoArr[4]) ?? '0');
+            const directs = Number.isNaN(directsParsed) ? 0 : directsParsed;
+
             return {
                 address: addr,
                 selfStaked,
@@ -839,6 +865,10 @@ export function useStakingContract() {
                 referralIncome: '0',
                 totalReferralIncome,
                 rank: Number.isNaN(rank) || rank <= 0 ? undefined : rank,
+                referrer,
+                referrerShort: shortenAddress(referrer),
+                lastAccruedAt,
+                directs,
             } satisfies DirectDetail;
         } catch (err) {
             console.warn('getMemberDetail failed', addr, err);
@@ -873,7 +903,7 @@ export function useStakingContract() {
                     args: [normalized],
                     chainId: supportedChainId,
                 });
-                directCount = Number(extractString((info as unknown[])[7]) ?? '0');
+                directCount = Number(extractString((info as unknown[])[4]) ?? '0');
             } catch {
                 directCount = 0;
             }
@@ -897,37 +927,46 @@ export function useStakingContract() {
     }, [supportedChainId]);
 
     const fetchTeamSize = useCallback(async () => {
-        const targetAddress = viewingAddress;
-        if (!targetAddress) {
+        const root = viewingAddress;
+        if (!root) {
             setTeamSize(0);
             return 0;
         }
-        try {
-            const result = await readContractSafe<unknown>({
-                address: CONTRACT_ADDRESS,
-                abi: CONTRACT_ABI,
-                functionName: 'getTeamSize',
-                args: [targetAddress],
-                chainId: supportedChainId,
-            });
 
-            console.log("result of team size ------>   ", result);
-            const size = Number(extractString(result) ?? '0');
-            setTeamSize(Number.isNaN(size) ? 0 : size);
-            return size;
-        } catch (err) {
-            console.error('fetchTeamSize error', err);
-            setTeamSize(0);
-            return 0;
+        const visited = new Set<string>([root.toLowerCase()]);
+        let total = 0;
+        let currentLevel = await fetchDirectsForAddress(root, userInfo?.directs);
+        let depth = 0;
+        const depthLimit = 10;
+
+        while (currentLevel.length && depth < depthLimit) {
+            depth += 1;
+            const nextLevel: string[] = [];
+            for (const addr of currentLevel) {
+                const normalized = addr.toLowerCase();
+                if (visited.has(normalized)) continue;
+                visited.add(normalized);
+                total += 1;
+                try {
+                    const directs = await fetchDirectsForAddress(addr as `0x${string}`);
+                    nextLevel.push(...directs);
+                } catch (err) {
+                    console.warn('fetchTeamSize direct fetch failed', err);
+                }
+            }
+            currentLevel = nextLevel;
         }
-    }, [supportedChainId, viewingAddress]);
+
+        setTeamSize(total);
+        return total;
+    }, [fetchDirectsForAddress, userInfo?.directs, viewingAddress]);
 
     const fetchTotalUsers = useCallback(async () => {
         try {
             const result = await readContractSafe<unknown>({
                 address: CONTRACT_ADDRESS,
                 abi: CONTRACT_ABI,
-                functionName: 'getTotalUsers',
+                functionName: 'totalUsers',
                 chainId: supportedChainId,
             });
             const total = Number(extractString(result) ?? '0');
@@ -983,20 +1022,26 @@ export function useStakingContract() {
 
     const fetchCompanyPoolStatus = useCallback(async () => {
         try {
-            const result = await readContractSafe<unknown>({
-                address: CONTRACT_ADDRESS,
-                abi: CONTRACT_ABI,
-                functionName: 'getCompanyPoolStatus',
-                chainId: supportedChainId,
-            });
-            if (Array.isArray(result) && result.length >= 2) {
-                const [pool, balance] = result as [unknown, unknown];
-                return {
-                    poolBalance: extractString(pool) ?? '0',
-                    contractTokenBalance: extractString(balance) ?? '0',
-                };
-            }
-            return { poolBalance: '0', contractTokenBalance: '0' };
+            const [poolRaw, balanceRaw] = await Promise.all([
+                readContractSafe<unknown>({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'companyValuationPool',
+                    chainId: supportedChainId,
+                }),
+                readContractSafe<unknown>({
+                    address: TOKEN_ADDRESS,
+                    abi: ERC20_ABI,
+                    functionName: 'balanceOf',
+                    args: [CONTRACT_ADDRESS],
+                    chainId: supportedChainId,
+                }),
+            ]);
+
+            return {
+                poolBalance: extractString(poolRaw) ?? '0',
+                contractTokenBalance: extractString(balanceRaw) ?? '0',
+            };
         } catch (err) {
             console.error('fetchCompanyPoolStatus error', err);
             return { poolBalance: '0', contractTokenBalance: '0' };
@@ -1668,34 +1713,48 @@ export function useStakingContract() {
         [fetchHistoryFromEvents]
     );
 
-    const fetchRoiHistory = useCallback(async () => {
-        const targetAddress = viewingAddress;
+    const fetchRoiHistory = useCallback(async (wallet?: `0x${string}`) => {
+        const targetAddress = wallet ?? viewingAddress;
         if (!targetAddress) return [] as Array<{ amount: string; timestamp: number }>;
         try {
-            const raw = await readContractSafe<unknown>({
+            const limitRaw = await readContractSafe<unknown>({
                 address: CONTRACT_ADDRESS,
                 abi: CONTRACT_ABI,
-                functionName: 'getStakeHistory',
-                args: [targetAddress],
+                functionName: 'ROI_HISTORY_LIMIT',
                 chainId: supportedChainId,
             });
-            if (!Array.isArray(raw)) return [];
-            return raw
-                .map((entry) => {
-                    if (Array.isArray(entry)) {
-                        const amount = extractString(entry[0]) ?? '0';
-                        const ts = Number(extractString(entry[1]) ?? '0');
-                        return { amount, timestamp: Number.isNaN(ts) ? 0 : ts };
+            const limit = Number(extractString(limitRaw) ?? '10');
+            const size = Number.isNaN(limit) || limit <= 0 ? 10 : Math.min(limit, 25);
+
+            const reads = await Promise.allSettled(
+                Array.from({ length: size }, (_, idx) =>
+                    readContractSafe<unknown>({
+                        address: CONTRACT_ADDRESS,
+                        abi: CONTRACT_ABI,
+                        functionName: 'roiHistory',
+                        args: [targetAddress, BigInt(idx)],
+                        chainId: supportedChainId,
+                    })
+                )
+            );
+
+            const DAY_SECONDS = 86_400;
+            const items = reads
+                .map((res) => {
+                    if (res.status !== 'fulfilled' || !Array.isArray(res.value)) {
+                        return null;
                     }
-                    if (entry && typeof entry === 'object') {
-                        const amount = extractString((entry as { amount?: unknown }).amount) ?? '0';
-                        const ts = Number(extractString((entry as { timestamp?: unknown }).timestamp) ?? '0');
-                        return { amount, timestamp: Number.isNaN(ts) ? 0 : ts };
-                    }
-                    return { amount: '0', timestamp: 0 };
+                    const [dayRaw, amountRaw] = res.value as [unknown, unknown];
+                    const amount = extractString(amountRaw) ?? '0';
+                    const dayNumber = Number(extractString(dayRaw) ?? '0');
+                    if (Number.isNaN(dayNumber) || (dayNumber === 0 && amount === '0')) return null;
+                    const timestamp = dayNumber * DAY_SECONDS;
+                    return { amount, timestamp, day: dayNumber };
                 })
-                .filter((item) => item.timestamp > 0 || item.amount !== '0')
+                .filter((entry): entry is { amount: string; timestamp: number; day: number } => Boolean(entry))
                 .sort((a, b) => b.timestamp - a.timestamp);
+
+            return items;
         } catch (err) {
             console.error('fetchRoiHistory error', err);
             return [];
@@ -1750,7 +1809,6 @@ export function useStakingContract() {
         withdrawBond,
         blockUser: blockUserAddress,
         unblockUser: unblockUserAddress,
-        setDistributionWallets: setDistributionWalletsOnChain,
         fetchUserLevelIncome,
         fetchUserActivity,
         mapHistoryEntries,
@@ -1763,6 +1821,7 @@ export function useStakingContract() {
         fetchLevelIncomeEvents,
         fetchROIHistoryFull,
         fetchLastNROIEvents,
+        fetchUserRoiHistory: fetchRoiHistory,
         directsList,
         directsWithBalances,
         loadingDirects,
@@ -1776,7 +1835,6 @@ export function useStakingContract() {
         refetchPendingRewards,
         refetchTokenBalance,
         refetchTokenAllowance,
-        refetchTokenPrice,
     };
 }
 

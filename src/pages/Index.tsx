@@ -37,15 +37,13 @@ export default function Index() {
     userRewardPercent,
   } = useStakingContract();
 
-  const EXTRA_STAKED_TOKENS = 21_000n;
-  const WEI_PER_TOKEN = 10n ** 18n;
-
-  const totalStakedAdjusted = useMemo(() => {
+  const totalStakedWei = useMemo(() => {
     try {
-      const base = typeof totalStaked === "bigint" ? totalStaked : 0n;
-      return base + EXTRA_STAKED_TOKENS * WEI_PER_TOKEN;
+      return typeof totalStaked === "bigint"
+        ? totalStaked
+        : BigInt(totalStaked ?? 0);
     } catch {
-      return EXTRA_STAKED_TOKENS * WEI_PER_TOKEN;
+      return 0n;
     }
   }, [totalStaked]);
 
@@ -72,8 +70,8 @@ export default function Index() {
   };
 
   const totalStakedDisplay = useMemo(
-    () => `${formatWeiToETN(totalStakedAdjusted.toString())} ETN`,
-    [totalStakedAdjusted]
+    () => `${formatWeiToETN(totalStakedWei.toString())} ETN`,
+    [totalStakedWei]
   );
 
   const heroStats = [

@@ -1,100 +1,23 @@
 
 [
     {
+        "anonymous": false,
         "inputs": [
             {
+                "indexed": false,
                 "internalType": "address",
-                "name": "target",
+                "name": "previousAdmin",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "newAdmin",
                 "type": "address"
             }
         ],
-        "name": "AddressEmptyCode",
-        "type": "error"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "implementation",
-                "type": "address"
-            }
-        ],
-        "name": "ERC1967InvalidImplementation",
-        "type": "error"
-    },
-    {
-        "inputs": [],
-        "name": "ERC1967NonPayable",
-        "type": "error"
-    },
-    {
-        "inputs": [],
-        "name": "FailedCall",
-        "type": "error"
-    },
-    {
-        "inputs": [],
-        "name": "InvalidInitialization",
-        "type": "error"
-    },
-    {
-        "inputs": [],
-        "name": "NotInitializing",
-        "type": "error"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "owner",
-                "type": "address"
-            }
-        ],
-        "name": "OwnableInvalidOwner",
-        "type": "error"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "OwnableUnauthorizedAccount",
-        "type": "error"
-    },
-    {
-        "inputs": [],
-        "name": "ReentrancyGuardReentrantCall",
-        "type": "error"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "token",
-                "type": "address"
-            }
-        ],
-        "name": "SafeERC20FailedOperation",
-        "type": "error"
-    },
-    {
-        "inputs": [],
-        "name": "UUPSUnauthorizedCallContext",
-        "type": "error"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32",
-                "name": "slot",
-                "type": "bytes32"
-            }
-        ],
-        "name": "UUPSUnsupportedProxiableUUID",
-        "type": "error"
+        "name": "AdminChanged",
+        "type": "event"
     },
     {
         "anonymous": false,
@@ -102,111 +25,24 @@
             {
                 "indexed": true,
                 "internalType": "address",
-                "name": "user",
+                "name": "beacon",
                 "type": "address"
-            },
+            }
+        ],
+        "name": "BeaconUpgraded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
             {
                 "indexed": false,
                 "internalType": "uint8",
-                "name": "planId",
-                "type": "uint8"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "principal",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "reward",
-                "type": "uint256"
-            }
-        ],
-        "name": "BondPurchased",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint8",
-                "name": "planId",
-                "type": "uint8"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "principal",
-                "type": "uint256"
-            }
-        ],
-        "name": "BondWithdrawn",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "from",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            }
-        ],
-        "name": "CompanyPoolFunded",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": false,
-                "internalType": "uint64",
                 "name": "version",
-                "type": "uint64"
+                "type": "uint8"
             }
         ],
         "name": "Initialized",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint8",
-                "name": "oldLevel",
-                "type": "uint8"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint8",
-                "name": "newLevel",
-                "type": "uint8"
-            }
-        ],
-        "name": "LevelUpdated",
         "type": "event"
     },
     {
@@ -234,168 +70,6 @@
             {
                 "indexed": true,
                 "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint8",
-                "name": "oldRank",
-                "type": "uint8"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint8",
-                "name": "newRank",
-                "type": "uint8"
-            }
-        ],
-        "name": "RankUpdated",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "from",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "to",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint8",
-                "name": "levelIndex",
-                "type": "uint8"
-            }
-        ],
-        "name": "ReferralCreditedFromPool",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "grossAmount",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "userAmount",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "totalCommission",
-                "type": "uint256"
-            }
-        ],
-        "name": "RoiClaimed",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            }
-        ],
-        "name": "RoiCompounded",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "referrer",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "usdLocked",
-                "type": "uint256"
-            }
-        ],
-        "name": "Staked",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "usdReduced",
-                "type": "uint256"
-            }
-        ],
-        "name": "Unstaked",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "address",
                 "name": "implementation",
                 "type": "address"
             }
@@ -405,7 +79,7 @@
     },
     {
         "inputs": [],
-        "name": "COMMUNITY_WALLET_PERCENT",
+        "name": "DAILY_RATE",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -418,20 +92,7 @@
     },
     {
         "inputs": [],
-        "name": "LIQUIDITY_WALLET_PERCENT",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "MARKETING_WALLET_PERCENT",
+        "name": "MAX_PRICE_CHANGE",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -470,6 +131,19 @@
     },
     {
         "inputs": [],
+        "name": "ROI_HISTORY_LIMIT",
+        "outputs": [
+            {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "SECONDS_PER_DAY",
         "outputs": [
             {
@@ -483,25 +157,12 @@
     },
     {
         "inputs": [],
-        "name": "TREASURY_WALLET_PERCENT",
+        "name": "TWAP_INTERVAL",
         "outputs": [
             {
                 "internalType": "uint256",
                 "name": "",
                 "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "UPGRADE_INTERFACE_VERSION",
-        "outputs": [
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
             }
         ],
         "stateMutability": "view",
@@ -530,16 +191,16 @@
         "inputs": [
             {
                 "internalType": "uint256",
-                "name": "fromIndex",
+                "name": "from",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "toIndex",
+                "name": "to",
                 "type": "uint256"
             }
         ],
-        "name": "batchCompoundAllUsers",
+        "name": "batchCompoundRewards",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -548,7 +209,7 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "user",
+                "name": "u",
                 "type": "address"
             }
         ],
@@ -616,11 +277,6 @@
                 "internalType": "uint256",
                 "name": "principal",
                 "type": "uint256"
-            },
-            {
-                "internalType": "address",
-                "name": "referrer",
-                "type": "address"
             }
         ],
         "name": "buyBond",
@@ -630,78 +286,7 @@
     },
     {
         "inputs": [],
-        "name": "claimRoi",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "communityWallet",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
         "name": "companyValuationPool",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "currentStakeWithAccrued",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "currentUsdAmountStaked",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "dailyRate",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -737,20 +322,39 @@
         "type": "function"
     },
     {
-        "inputs": [
+        "inputs": [],
+        "name": "emergencyPause",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "emergencyPaused",
+        "outputs": [
             {
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
             }
         ],
-        "name": "emergenceySetUserData",
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "emergencyUnpause",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
     {
         "inputs": [
+            {
+                "internalType": "address",
+                "name": "token",
+                "type": "address"
+            },
             {
                 "internalType": "address",
                 "name": "to",
@@ -762,20 +366,14 @@
                 "type": "uint256"
             }
         ],
-        "name": "emergencyWithdraw",
+        "name": "emergencyWithdrawToken",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "evaluateAndSetRank",
+        "inputs": [],
+        "name": "finalizeMigration",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -788,158 +386,9 @@
                 "type": "uint256"
             }
         ],
-        "name": "fundCompanyValuationPool",
+        "name": "fundCompanyPool",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "getCompanyPoolStatus",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "poolBalanceLogical",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "contractTokenBalance",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getDirectsWithRewards",
-        "outputs": [
-            {
-                "internalType": "address[]",
-                "name": "directs",
-                "type": "address[]"
-            },
-            {
-                "internalType": "uint256[]",
-                "name": "rewards",
-                "type": "uint256[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getStakeHistory",
-        "outputs": [
-            {
-                "components": [
-                    {
-                        "internalType": "uint256",
-                        "name": "amount",
-                        "type": "uint256"
-                    },
-                    {
-                        "internalType": "uint256",
-                        "name": "timestamp",
-                        "type": "uint256"
-                    }
-                ],
-                "internalType": "struct StakingPlatform.RoiHistory[]",
-                "name": "",
-                "type": "tuple[]"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getTeamSize",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "getTotalUsers",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "getUserReport",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "pendingRoi",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "stakeWithAccrued",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "usdStakedLive",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint8",
-                "name": "displayLevel",
-                "type": "uint8"
-            },
-            {
-                "internalType": "uint256",
-                "name": "bondCount",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "roiHistoryCount",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -975,18 +424,8 @@
             },
             {
                 "internalType": "address",
-                "name": "_usdtToken",
+                "name": "_pair",
                 "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "_pricePair",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_manualPrice18",
-                "type": "uint256"
             }
         ],
         "name": "initialize",
@@ -1002,12 +441,25 @@
                 "type": "address"
             }
         ],
-        "name": "isUserRegistered",
+        "name": "isUser",
         "outputs": [
             {
                 "internalType": "bool",
                 "name": "",
                 "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "lastTwapUpdate",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
             }
         ],
         "stateMutability": "view",
@@ -1054,7 +506,7 @@
             },
             {
                 "internalType": "uint256",
-                "name": "selfStakeUsdReq",
+                "name": "selfStakeReq",
                 "type": "uint256"
             },
             {
@@ -1067,39 +519,46 @@
         "type": "function"
     },
     {
-        "inputs": [],
-        "name": "liquidityWallet",
-        "outputs": [
+        "inputs": [
             {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
+                "internalType": "address[]",
+                "name": "users_",
+                "type": "address[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "stakes_",
+                "type": "uint256[]"
+            },
+            {
+                "internalType": "address[]",
+                "name": "refs_",
+                "type": "address[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "lastAccrued_",
+                "type": "uint256[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "directs_",
+                "type": "uint256[]"
             }
         ],
-        "stateMutability": "view",
+        "name": "migrateUsers",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
         "inputs": [],
-        "name": "manualTokenPrice",
+        "name": "migrationCompleted",
         "outputs": [
             {
-                "internalType": "uint256",
+                "internalType": "bool",
                 "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "marketingWallet",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
+                "type": "bool"
             }
         ],
         "stateMutability": "view",
@@ -1122,11 +581,11 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "account",
+                "name": "user",
                 "type": "address"
             }
         ],
-        "name": "pendingRewards",
+        "name": "pendingReward",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -1216,12 +675,12 @@
         "outputs": [
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "day",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "timestamp",
+                "name": "amount",
                 "type": "uint256"
             }
         ],
@@ -1231,66 +690,51 @@
     {
         "inputs": [
             {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "roiHistoryIndex",
+        "outputs": [
+            {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+            },
+            {
                 "internalType": "uint256",
-                "name": "newDailyRate18",
+                "name": "stake",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "referrer",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "lastAccrued",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "directs",
                 "type": "uint256"
             }
         ],
-        "name": "setDailyRate",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "_communityWallet",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "_treasuryWallet",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "_marketingWallet",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "_liquidityWallet",
-                "type": "address"
-            }
-        ],
-        "name": "setDistributionWallets",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "_price18",
-                "type": "uint256"
-            }
-        ],
-        "name": "setManualTokenPrice",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "_pair",
-                "type": "address"
-            }
-        ],
-        "name": "setPricePair",
+        "name": "setUserDetails",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -1318,7 +762,7 @@
         "name": "stakingToken",
         "outputs": [
             {
-                "internalType": "contract IERC20Metadata",
+                "internalType": "contract IERC20",
                 "name": "",
                 "type": "address"
             }
@@ -1327,14 +771,21 @@
         "type": "function"
     },
     {
-        "inputs": [
+        "inputs": [],
+        "name": "totalStaked",
+        "outputs": [
             {
                 "internalType": "uint256",
-                "name": "tokenAmount",
+                "name": "",
                 "type": "uint256"
             }
         ],
-        "name": "tokenToUsd18",
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "totalUsers",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -1360,12 +811,12 @@
     },
     {
         "inputs": [],
-        "name": "treasuryWallet",
+        "name": "twapPrice18",
         "outputs": [
             {
-                "internalType": "address",
+                "internalType": "uint256",
                 "name": "",
-                "type": "address"
+                "type": "uint256"
             }
         ],
         "stateMutability": "view",
@@ -1375,11 +826,11 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "user",
+                "name": "u",
                 "type": "address"
             }
         ],
-        "name": "unBlockUser",
+        "name": "unblockUser",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -1393,6 +844,26 @@
             }
         ],
         "name": "unstake",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "updateTwap",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "newImplementation",
+                "type": "address"
+            }
+        ],
+        "name": "upgradeTo",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -1413,38 +884,6 @@
         "name": "upgradeToAndCall",
         "outputs": [],
         "stateMutability": "payable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "usd18Amount",
-                "type": "uint256"
-            }
-        ],
-        "name": "usd18ToToken",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "usdtToken",
-        "outputs": [
-            {
-                "internalType": "contract IERC20Metadata",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -1479,7 +918,7 @@
             },
             {
                 "internalType": "uint256",
-                "name": "startAt",
+                "name": "endAt",
                 "type": "uint256"
             },
             {
@@ -1503,27 +942,12 @@
         "outputs": [
             {
                 "internalType": "uint256",
-                "name": "originalStaked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "originalUsdLocked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
                 "name": "selfStaked",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "selfStakedUsdLocked",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "activeBondValue",
+                "name": "activeBondPrincipal",
                 "type": "uint256"
             },
             {
@@ -1553,22 +977,17 @@
             },
             {
                 "internalType": "uint256",
-                "name": "totalRoiEarned",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalLevelRewardEarned",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalReferralIncome",
+                "name": "totalEarned",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
                 "name": "totalWithdrawn",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalReferralIncome",
                 "type": "uint256"
             }
         ],
@@ -1579,7 +998,7 @@
         "inputs": [
             {
                 "internalType": "uint256",
-                "name": "bondIndex",
+                "name": "index",
                 "type": "uint256"
             }
         ],
