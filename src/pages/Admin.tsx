@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,7 +50,11 @@ function normalizeAddress(value: string) {
 
 const Admin = () => {
   const { address: connectedAddress } = useAccount();
-  const { data: ownerAddress, isLoading: ownerLoading } = useReadContract({
+  const {
+    data: ownerAddress,
+    isLoading: ownerLoading,
+    refetch: refetchOwner,
+  } = useReadContract({
     address: CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`,
     abi: CONTRACT_ABI,
     functionName: "owner",
@@ -63,11 +67,15 @@ const Admin = () => {
 
   const {
     totalStaked,
+    tokenPriceUsd,
+    manualTokenPrice,
     fetchUsersBatch,
     fetchMemberDetails,
     fetchCompanyPoolStatus,
     blockUser: blockUserOnChain,
     unblockUser: unblockUserOnChain,
+    fundCompanyPool,
+    transferOwnership,
     fetchUserRoiHistory,
   } = useStakingContract();
 
@@ -96,6 +104,10 @@ const Admin = () => {
   >([]);
   const [roiLoading, setRoiLoading] = useState(false);
   const [roiError, setRoiError] = useState<string | null>(null);
+  const [fundAmount, setFundAmount] = useState("");
+  const [fundingPool, setFundingPool] = useState(false);
+  const [ownershipAddressInput, setOwnershipAddressInput] = useState("");
+  const [transferringOwnership, setTransferringOwnership] = useState(false);
 
   const manageAddressIsValid = useMemo(
     () => Boolean(normalizeAddress(manageUserAddress)),
@@ -118,6 +130,30 @@ const Admin = () => {
   const contractBalanceDisplay = formatTokenAmount(
     companyPool.contractTokenBalance
   );
+
+  const ownerDisplay = useMemo(() => {
+    if (ownerLoading) return "…";
+    if (!ownerAddress) return "Unknown";
+    return ownerAddress;
+  }, [ownerAddress, ownerLoading]);
+
+  const tokenPriceSource = useMemo(() => {
+    if (tokenPriceUsd && tokenPriceUsd !== "0") return tokenPriceUsd;
+    if (manualTokenPrice && manualTokenPrice !== "0") return manualTokenPrice;
+    return null;
+  }, [manualTokenPrice, tokenPriceUsd]);
+
+  const tokenPriceDisplay = useMemo(() => {
+    if (!tokenPriceSource) return "N/A";
+    try {
+      const units = formatUnits(BigInt(tokenPriceSource), 18);
+      const numeric = Number.parseFloat(units);
+      if (Number.isNaN(numeric)) return "N/A";
+      return `$${numeric.toFixed(4)}`;
+    } catch {
+      return "N/A";
+    }
+  }, [tokenPriceSource]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -282,6 +318,74 @@ const Admin = () => {
     }
   };
 
+  const handleFundCompanyPool = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isAdmin) {
+      toast.error("Only the contract owner can fund the pool");
+      return;
+    }
+
+    const trimmed = fundAmount.trim();
+    if (!trimmed) {
+      toast.error("Enter an ETN amount");
+      return;
+    }
+
+    if (Number.parseFloat(trimmed) <= 0) {
+      toast.error("Enter a positive amount");
+      return;
+    }
+
+    setFundingPool(true);
+    try {
+      await fundCompanyPool(trimmed);
+      setFundAmount("");
+      const status = await fetchCompanyPoolStatus();
+      setCompanyPool(status);
+    } catch (error) {
+      console.error("fundCompanyPool failed", error);
+    } finally {
+      setFundingPool(false);
+    }
+  };
+
+  const handleTransferOwnership = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isAdmin) {
+      toast.error("Only the current owner can transfer ownership");
+      return;
+    }
+
+    const normalized = normalizeAddress(ownershipAddressInput);
+    if (!normalized) {
+      toast.error("Enter a valid wallet address");
+      return;
+    }
+
+    if (
+      ownerAddress &&
+      normalized.toLowerCase() === ownerAddress.toLowerCase()
+    ) {
+      toast.error("Address is already the owner");
+      return;
+    }
+
+    setTransferringOwnership(true);
+    try {
+      await transferOwnership(normalized as `0x${string}`);
+      setOwnershipAddressInput("");
+      try {
+        await refetchOwner?.();
+      } catch {
+        // ignore refetch failures; wagmi will update eventually
+      }
+    } catch (error) {
+      console.error("transferOwnership failed", error);
+    } finally {
+      setTransferringOwnership(false);
+    }
+  };
+
   const handleRefreshRoiHistory = async () => {
     if (!searchResult) return;
     const normalized = normalizeAddress(searchResult.address);
@@ -331,6 +435,7 @@ const Admin = () => {
 
       const payload = {
         users_: aggregated.map((entry) => entry.address),
+        originalStaked_: aggregated.map((entry) => entry.originalStaked ?? "0"),
         selfStaked_: aggregated.map((entry) => entry.selfStaked ?? "0"),
         referrers_: aggregated.map(
           (entry) =>
@@ -420,7 +525,7 @@ const Admin = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
             <CardHeader>
               <CardTitle className="text-sm text-gray-400">
@@ -444,6 +549,18 @@ const Admin = () => {
             <CardContent>
               <p className="text-3xl font-semibold text-yellow-400">
                 {totalStakedDisplay} ETN
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                ETN Token Price
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold text-yellow-400">
+                {tokenPriceDisplay}
               </p>
             </CardContent>
           </Card>
@@ -488,6 +605,73 @@ const Admin = () => {
           </Card>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                Fund Company Pool
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleFundCompanyPool}>
+                <Input
+                  placeholder="Amount in ETN"
+                  value={fundAmount}
+                  onChange={(event) => setFundAmount(event.target.value)}
+                  disabled={fundingPool || !isAdmin}
+                  className="input-bg border-gray-700 text-white"
+                />
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={fundingPool || !isAdmin}
+                >
+                  {fundingPool ? "Funding…" : "Fund Pool"}
+                </Button>
+                <p className="text-xs text-gray-500">
+                  Transfers ETN from the owner wallet into the company valuation
+                  pool.
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                Transfer Ownership
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="text-xs text-gray-500">
+                <div>Current Owner</div>
+                <div className="text-yellow-400 break-all">{ownerDisplay}</div>
+              </div>
+              <form className="space-y-3" onSubmit={handleTransferOwnership}>
+                <Input
+                  placeholder="New owner wallet (0x…)"
+                  value={ownershipAddressInput}
+                  onChange={(event) =>
+                    setOwnershipAddressInput(event.target.value)
+                  }
+                  disabled={transferringOwnership || !isAdmin}
+                  className="input-bg border-gray-700 text-white"
+                />
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={transferringOwnership || !isAdmin}
+                >
+                  {transferringOwnership ? "Transferring…" : "Transfer"}
+                </Button>
+                <p className="text-xs text-gray-500">
+                  Executes the contract ownership transfer transaction.
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
         <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
           <CardHeader>
             <CardTitle className="text-lg text-yellow-400">
@@ -525,11 +709,35 @@ const Admin = () => {
                 <div className="text-sm text-yellow-300 break-all">
                   {searchResult.address}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-300">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-sm text-gray-300">
+                  <div className="flex justify-between">
+                    <span>Original Staked</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.originalStaked)} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Original USD Locked</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.originalUsdLocked)} ETN
+                    </span>
+                  </div>
                   <div className="flex justify-between">
                     <span>Self Staked</span>
                     <span className="text-yellow-300 font-medium">
                       {formatTokenAmount(searchResult.selfStaked)} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Self Staked USD Locked</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.selfStakedUsdLocked)} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Active Bond Value</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.activeBondValue)} ETN
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -545,21 +753,40 @@ const Admin = () => {
                     </span>
                   </div>
                   <div className="flex justify-between">
+                    <span>Total ROI Earned</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.totalRoiEarned)} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Level Reward</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.totalLevelRewardEarned)}{" "}
+                      ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
                     <span>Total Referral Income</span>
                     <span className="text-yellow-300 font-medium">
                       {formatTokenAmount(searchResult.totalReferralIncome)} ETN
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Level</span>
-                    <span className="text-yellow-300 font-medium">
-                      {searchResult.level || "-"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
                     <span>Latest Referral Reward</span>
                     <span className="text-yellow-300 font-medium">
                       {formatTokenAmount(searchResult.referralIncome)} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Withdrawn</span>
+                    <span className="text-yellow-300 font-medium">
+                      {formatTokenAmount(searchResult.totalWithdrawn)} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Level</span>
+                    <span className="text-yellow-300 font-medium">
+                      {searchResult.level || "-"}
                     </span>
                   </div>
                   {searchResult.rank != null && (
@@ -728,26 +955,33 @@ const Admin = () => {
                   <th className="py-2 pr-4">Address</th>
                   <th className="py-2 pr-4">Referrer</th>
                   <th className="py-2 pr-4">Directs</th>
-                  <th className="py-2 pr-4">Last Accrued</th>
                   <th className="py-2 pr-4">Level</th>
                   <th className="py-2 pr-4">Rank</th>
+                  <th className="py-2 pr-4">Last Accrued</th>
+                  <th className="py-2 pr-4">Original Staked (ETN)</th>
+                  <th className="py-2 pr-4">Original USD Locked (ETN)</th>
                   <th className="py-2 pr-4">Self Staked (ETN)</th>
+                  <th className="py-2 pr-4">Self Staked USD Locked (ETN)</th>
+                  <th className="py-2 pr-4">Active Bond (ETN)</th>
                   <th className="py-2 pr-4">Stake + Accrued (ETN)</th>
                   <th className="py-2 pr-4">Pending ROI (ETN)</th>
+                  <th className="py-2 pr-4">Total ROI Earned (ETN)</th>
+                  <th className="py-2 pr-4">Total Level Reward (ETN)</th>
                   <th className="py-2 pr-4">Latest Referral (ETN)</th>
-                  <th className="py-2">Total Referral (ETN)</th>
+                  <th className="py-2 pr-4">Total Referral (ETN)</th>
+                  <th className="py-2">Total Withdrawn (ETN)</th>
                 </tr>
               </thead>
               <tbody>
                 {tableLoading ? (
                   <tr>
-                    <td colSpan={11} className="py-6 text-center text-gray-500">
+                    <td colSpan={18} className="py-6 text-center text-gray-500">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-6 text-center text-gray-500">
+                    <td colSpan={18} className="py-6 text-center text-gray-500">
                       No users found.
                     </td>
                   </tr>
@@ -777,16 +1011,28 @@ const Admin = () => {
                           {user.directs.toLocaleString()}
                         </td>
                         <td className="py-3 pr-4 text-gray-200">
-                          {user.lastAccruedAt ?? "0"}
-                        </td>
-                        <td className="py-3 pr-4 text-gray-200">
                           {user.level || "-"}
                         </td>
                         <td className="py-3 pr-4 text-gray-200">
                           {user.rank ?? "-"}
                         </td>
                         <td className="py-3 pr-4 text-yellow-200">
+                          {user.lastAccruedAt ?? "0"}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
+                          {formatTokenAmount(user.originalStaked)}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
+                          {formatTokenAmount(user.originalUsdLocked)}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
                           {formatTokenAmount(user.selfStaked)}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
+                          {formatTokenAmount(user.selfStakedUsdLocked)}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
+                          {formatTokenAmount(user.activeBondValue)}
                         </td>
                         <td className="py-3 pr-4 text-yellow-200">
                           {formatTokenAmount(user.stakeWithAccrued)}
@@ -795,10 +1041,19 @@ const Admin = () => {
                           {formatTokenAmount(user.pendingRoi)}
                         </td>
                         <td className="py-3 pr-4 text-yellow-200">
+                          {formatTokenAmount(user.totalRoiEarned)}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
+                          {formatTokenAmount(user.totalLevelRewardEarned)}
+                        </td>
+                        <td className="py-3 pr-4 text-yellow-200">
                           {formatTokenAmount(user.referralIncome)}
                         </td>
                         <td className="py-3 text-yellow-200">
                           {formatTokenAmount(user.totalReferralIncome)}
+                        </td>
+                        <td className="py-3 text-yellow-200">
+                          {formatTokenAmount(user.totalWithdrawn)}
                         </td>
                       </tr>
                     );

@@ -23,8 +23,10 @@ import {
   CheckCircle,
   XCircle,
   Users,
+  DollarSign,
 } from "lucide-react";
 import { STATS } from "@/lib/constants";
+import { formatUnits } from "viem";
 
 type MemberDetail = {
   address: string;
@@ -456,6 +458,7 @@ export default function Dashboard() {
     pendingComputed,
     pendingComputedHuman,
     manualTokenPrice,
+    tokenPriceUsd,
     userLevel,
     userRewardPercent,
     refetchTotalStaked,
@@ -512,6 +515,24 @@ export default function Dashboard() {
 
   const activeBondValueHuman = formatWeiToETN(userInfo?.activeBondValue);
 
+  const tokenPriceSource = useMemo(() => {
+    if (tokenPriceUsd && tokenPriceUsd !== "0") return tokenPriceUsd;
+    if (manualTokenPrice && manualTokenPrice !== "0") return manualTokenPrice;
+    return null;
+  }, [manualTokenPrice, tokenPriceUsd]);
+
+  const tokenPriceDisplay = useMemo(() => {
+    if (!tokenPriceSource) return "N/A";
+    try {
+      const units = formatUnits(BigInt(tokenPriceSource), 18);
+      const numeric = Number.parseFloat(units);
+      if (Number.isNaN(numeric)) return "N/A";
+      return `$${numeric.toFixed(4)}`;
+    } catch {
+      return "N/A";
+    }
+  }, [tokenPriceSource]);
+
   const portfolioChange = {
     daily: "+5.67%",
     weekly: "+12.34%",
@@ -520,9 +541,10 @@ export default function Dashboard() {
 
   const hasClaimableRewards = useMemo(() => {
     try {
-      const primary = pendingRewards && pendingRewards !== "0"
-        ? pendingRewards
-        : pendingComputed;
+      const primary =
+        pendingRewards && pendingRewards !== "0"
+          ? pendingRewards
+          : pendingComputed;
       if (!primary) return false;
       return BigInt(primary) > 0n;
     } catch {
@@ -551,7 +573,14 @@ export default function Dashboard() {
     } finally {
       setClaimLoading(false);
     }
-  }, [claimLoading, hasClaimableRewards, claimRoi, refetchPendingRewards, refetchUserInfo, refetchTotalStaked]);
+  }, [
+    claimLoading,
+    hasClaimableRewards,
+    claimRoi,
+    refetchPendingRewards,
+    refetchUserInfo,
+    refetchTotalStaked,
+  ]);
 
   // bonds state & helpers
   const [bonds, setBonds] = useState<
@@ -874,7 +903,7 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
             title="Team Size"
             value={`${teamSize ?? 0}`}
@@ -904,6 +933,16 @@ export default function Dashboard() {
             description="Principal + rewards still vesting"
             colorIndex={6}
             aosDelay={350}
+          />
+          <StatCard
+            title="ETN Token Price"
+            value={tokenPriceDisplay}
+            change="LP-derived price"
+            changeType="neutral"
+            icon={<DollarSign className="w-5 h-5" />}
+            description="USD quote from PancakeSwap"
+            colorIndex={7}
+            aosDelay={400}
           />
         </div>
 
@@ -1535,7 +1574,9 @@ export default function Dashboard() {
                     className="card-btn card-btn-sec-bg"
                     onClick={() => void handleClaimRewards()}
                     disabled={claimLoading || !hasClaimableRewards}
-                    title={!hasClaimableRewards ? "No rewards available" : undefined}
+                    title={
+                      !hasClaimableRewards ? "No rewards available" : undefined
+                    }
                   >
                     {claimLoading ? "Claiming…" : "Claim Rewards"}
                   </Button>

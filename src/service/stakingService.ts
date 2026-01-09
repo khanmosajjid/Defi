@@ -16,9 +16,24 @@ const ERC20_ABI = [
     { constant: false, inputs: [{ name: '_spender', type: 'address' }, { name: '_value', type: 'uint256' }], name: 'approve', outputs: [{ name: 'success', type: 'bool' }], type: 'function' },
 ];
 
+const ERC20_DECIMALS_ABI = [
+    { inputs: [], name: 'decimals', outputs: [{ internalType: 'uint8', name: '', type: 'uint8' }], stateMutability: 'view', type: 'function' },
+] as const;
+
 const UNISWAP_V2_PAIR_ABI = [
     { inputs: [], name: 'token0', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
     { inputs: [], name: 'token1', outputs: [{ internalType: 'address', name: '', type: 'address' }], stateMutability: 'view', type: 'function' },
+    {
+        inputs: [],
+        name: 'getReserves',
+        outputs: [
+            { internalType: 'uint112', name: '_reserve0', type: 'uint112' },
+            { internalType: 'uint112', name: '_reserve1', type: 'uint112' },
+            { internalType: 'uint32', name: '_blockTimestampLast', type: 'uint32' },
+        ],
+        stateMutability: 'view',
+        type: 'function',
+    },
 ] as const;
 
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`;
@@ -110,12 +125,19 @@ type ActivityItem = {
 
 export type DirectDetail = {
     address: string;
+    originalStaked: string;
+    originalUsdLocked: string;
     selfStaked: string;
+    selfStakedUsdLocked: string;
+    activeBondValue: string;
     stakeWithAccrued: string;
     pendingRoi: string;
     level: number;
     referralIncome: string;
-    totalReferralIncome?: string;
+    totalReferralIncome: string;
+    totalRoiEarned: string;
+    totalLevelRewardEarned: string;
+    totalWithdrawn: string;
     rank?: number;
     referrer: string;
     referrerShort: string;
@@ -133,12 +155,19 @@ type HistoryEntry = {
 function buildEmptyDirectDetail(address: string): DirectDetail {
     return {
         address,
+        originalStaked: '0',
+        originalUsdLocked: '0',
         selfStaked: '0',
+        selfStakedUsdLocked: '0',
+        activeBondValue: '0',
         stakeWithAccrued: '0',
         pendingRoi: '0',
         level: 0,
         referralIncome: '0',
         totalReferralIncome: '0',
+        totalRoiEarned: '0',
+        totalLevelRewardEarned: '0',
+        totalWithdrawn: '0',
         referrer: ZERO_ADDRESS,
         referrerShort: shortenAddress(ZERO_ADDRESS),
         lastAccruedAt: '0',
@@ -204,6 +233,30 @@ function toNum(v: unknown): number | undefined {
         return Number.isNaN(n) ? undefined : n;
     }
     return undefined;
+}
+
+function normalizeDecimals(value: number | undefined, fallback = 18) {
+    if (typeof value !== 'number' || Number.isNaN(value) || value < 0) return fallback;
+    return value > 36 ? 36 : value;
+}
+
+function scaleReserve(value: bigint, fromDecimals: number, toDecimals: number) {
+    if (value === 0n) return 0n;
+    if (fromDecimals === toDecimals) return value;
+    if (fromDecimals > toDecimals) {
+        const diff = BigInt(fromDecimals - toDecimals);
+        return value / (10n ** diff);
+    }
+    const diff = BigInt(toDecimals - fromDecimals);
+    return value * (10n ** diff);
+}
+
+function computePriceFromPair(baseReserve: bigint, baseDecimals: number, quoteReserve: bigint, quoteDecimals: number) {
+    if (baseReserve === 0n || quoteReserve === 0n) return 0n;
+    const baseScaled = scaleReserve(baseReserve, baseDecimals, 18);
+    const quoteScaled = scaleReserve(quoteReserve, quoteDecimals, 18);
+    if (baseScaled === 0n || quoteScaled === 0n) return 0n;
+    return (quoteScaled * ONE_TOKEN) / baseScaled;
 }
 
 function extractString(v: unknown): string | null {
@@ -292,12 +345,6 @@ export function useStakingContract() {
         query: { enabled: Boolean(viewingAddress) },
     });
 
-    const { data: twapPriceRaw } = useReadContract({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'twapPrice18',
-    });
-
     const { data: pricePairRaw } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -325,10 +372,43 @@ export function useStakingContract() {
         query: { enabled: Boolean(pricePairAddress) },
     });
 
+    const { data: pairReservesRaw } = useReadContract({
+        address: pricePairAddress,
+        abi: UNISWAP_V2_PAIR_ABI,
+        functionName: 'getReserves',
+        query: { enabled: Boolean(pricePairAddress), refetchInterval: 60_000 },
+    });
+
+    const pairToken0Address = useMemo(() => {
+        const value = typeof pairToken0Raw === 'string' ? pairToken0Raw : undefined;
+        if (!value || value === ZERO_ADDRESS) return undefined;
+        return value as `0x${string}`;
+    }, [pairToken0Raw]);
+
+    const pairToken1Address = useMemo(() => {
+        const value = typeof pairToken1Raw === 'string' ? pairToken1Raw : undefined;
+        if (!value || value === ZERO_ADDRESS) return undefined;
+        return value as `0x${string}`;
+    }, [pairToken1Raw]);
+
+    const { data: token0DecimalsRaw } = useReadContract({
+        address: pairToken0Address,
+        abi: ERC20_DECIMALS_ABI,
+        functionName: 'decimals',
+        query: { enabled: Boolean(pairToken0Address) },
+    });
+
+    const { data: token1DecimalsRaw } = useReadContract({
+        address: pairToken1Address,
+        abi: ERC20_DECIMALS_ABI,
+        functionName: 'decimals',
+        query: { enabled: Boolean(pairToken1Address) },
+    });
+
     const { data: dailyRateRaw } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
-        functionName: 'DAILY_RATE',
+        functionName: 'dailyRate',
     });
 
     const { data: tokenBalanceRaw, refetch: refetchTokenBalance } = useReadContract({
@@ -350,7 +430,7 @@ export function useStakingContract() {
     const { data: pendingRewardRaw, refetch: refetchPendingReward } = useReadContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
-        functionName: 'pendingReward',
+        functionName: 'pendingRewards',
         args: [viewingAddress],
         query: { enabled: Boolean(viewingAddress) },
     });
@@ -358,12 +438,15 @@ export function useStakingContract() {
     const userInfo = useMemo(() => {
         if (!userInfoRaw) return null;
         const arr = userInfoRaw as unknown[];
-        const selfStaked = extractString(arr[0]) ?? '0';
-        const activeBondPrincipal = extractString(arr[1]) ?? '0';
-        const lastAccruedAt = extractString(arr[2]) ?? '0';
-        const referrer = (arr[3] as string) ?? ZERO_ADDRESS;
-        const directsValue = Number(extractString(arr[4]) ?? '0');
-        const levelRaw = extractString(arr[5]) ?? '0';
+        const originalStaked = extractString(arr[0]) ?? '0';
+        const originalUsdLocked = extractString(arr[1]) ?? '0';
+        const selfStaked = extractString(arr[2]) ?? '0';
+        const selfStakedUsdLocked = extractString(arr[3]) ?? '0';
+        const activeBondValue = extractString(arr[4]) ?? '0';
+        const lastAccruedAt = extractString(arr[5]) ?? '0';
+        const referrer = (arr[6] as string) ?? ZERO_ADDRESS;
+        const directsValue = Number(extractString(arr[7]) ?? '0');
+        const levelRaw = extractString(arr[8]) ?? '0';
         let level = 0;
         try {
             const lvl = BigInt(levelRaw);
@@ -371,14 +454,18 @@ export function useStakingContract() {
         } catch {
             level = 0;
         }
-        const rankValue = Number(extractString(arr[6]) ?? '0');
-        const totalEarned = extractString(arr[7]) ?? '0';
-        const totalWithdrawn = extractString(arr[8]) ?? '0';
-        const totalReferralIncome = extractString(arr[9]) ?? '0';
+        const rankValue = Number(extractString(arr[9]) ?? '0');
+        const totalRoiEarned = extractString(arr[10]) ?? '0';
+        const totalLevelRewardEarned = extractString(arr[11]) ?? '0';
+        const totalReferralIncome = extractString(arr[12]) ?? '0';
+        const totalWithdrawn = extractString(arr[13]) ?? '0';
 
         return {
+            originalStaked,
+            originalUsdLocked,
             selfStaked,
-            activeBondValue: activeBondPrincipal,
+            selfStakedUsdLocked,
+            activeBondValue,
             lastAccruedAt,
             referrer,
             referrerShort: shortenAddress(referrer),
@@ -386,8 +473,8 @@ export function useStakingContract() {
             level,
             rank: rankValue,
             rankName: getRankName(rankValue),
-            totalRoiEarned: totalEarned,
-            totalLevelRewardEarned: '0',
+            totalRoiEarned,
+            totalLevelRewardEarned,
             totalReferralIncome,
             totalWithdrawn,
         };
@@ -452,31 +539,37 @@ export function useStakingContract() {
         : null;
 
     const tokenPriceUsd = useMemo(() => {
-        if (twapPriceRaw == null) return '0';
+        if (!pairReservesRaw) return '0';
         try {
-            const price = BigInt(twapPriceRaw as bigint);
-            if (price <= 0n) return '0';
+            const reserves = pairReservesRaw as unknown[];
+            const reserve0 = reserves[0];
+            const reserve1 = reserves[1];
+            if (typeof reserve0 !== 'bigint' || typeof reserve1 !== 'bigint') return '0';
 
             const stakingLower = TOKEN_ADDRESS.toLowerCase();
-            const token0 = typeof pairToken0Raw === 'string' ? pairToken0Raw.toLowerCase() : undefined;
-            const token1 = typeof pairToken1Raw === 'string' ? pairToken1Raw.toLowerCase() : undefined;
+            const token0Lower = pairToken0Address?.toLowerCase();
+            const token1Lower = pairToken1Address?.toLowerCase();
+            if (!token0Lower || !token1Lower) return '0';
 
-            if (token0 === stakingLower) {
+            const decimals0 = normalizeDecimals(toNum(token0DecimalsRaw), 18);
+            const decimals1 = normalizeDecimals(toNum(token1DecimalsRaw), 18);
+
+            if (token0Lower === stakingLower) {
+                const price = computePriceFromPair(reserve0, decimals0, reserve1, decimals1);
                 return price.toString();
             }
 
-            if (token1 === stakingLower) {
-                if (price === 0n) return '0';
-                const inverted = (ONE_TOKEN * ONE_TOKEN) / price;
-                return inverted.toString();
+            if (token1Lower === stakingLower) {
+                const price = computePriceFromPair(reserve1, decimals1, reserve0, decimals0);
+                return price.toString();
             }
 
-            return price.toString();
+            return '0';
         } catch (error) {
             console.error('tokenPriceUsd compute failed', error);
             return '0';
         }
-    }, [pairToken0Raw, pairToken1Raw, twapPriceRaw]);
+    }, [pairReservesRaw, pairToken0Address, pairToken1Address, token0DecimalsRaw, token1DecimalsRaw]);
 
     const pendingRewards = userReport?.pendingRoi ?? '0';
     const pendingRewardsHuman = formatUnits(pendingRewards, 18);
@@ -793,6 +886,51 @@ export function useStakingContract() {
         }
     }
 
+    async function fundCompanyPool(amount: string) {
+        const txToast = toast.loading('Funding company pool...');
+        try {
+            const trimmed = amount.trim();
+            if (!trimmed) {
+                throw new Error('Enter an amount to fund');
+            }
+            const amountWei = parseEther(trimmed);
+            if (amountWei <= 0n) {
+                throw new Error('Amount must be greater than zero');
+            }
+
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'fundCompanyValuationPool',
+                args: [amountWei],
+            });
+            toast.success('Company pool funded', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('fundCompanyPool error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function transferOwnership(newOwner: `0x${string}`) {
+        const txToast = toast.loading('Transferring ownership...');
+        try {
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'transferOwnership',
+                args: [newOwner],
+            });
+            toast.success('Ownership transferred', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('transferOwnership error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
     const fetchUserLevelIncome = useCallback(async () => {
         const targetAddress = viewingAddress;
         if (!targetAddress) return Array(15).fill('0');
@@ -823,24 +961,23 @@ export function useStakingContract() {
                 readContractSafe<unknown>({
                     address: CONTRACT_ADDRESS,
                     abi: CONTRACT_ABI,
-                    functionName: 'pendingReward',
+                    functionName: 'pendingRewards',
                     args: [addr],
                     chainId: supportedChainId,
                 }),
             ]);
 
             const infoArr = Array.isArray(infoRaw) ? infoRaw : [];
-            const selfStaked = extractString(infoArr[0]) ?? '0';
-            const activeBond = extractString(infoArr[1]) ?? '0';
-            const pendingRoi = extractString(pendingRaw) ?? '0';
-            let stakeWithAccrued = selfStaked;
-            try {
-                stakeWithAccrued = (BigInt(selfStaked) + BigInt(activeBond ?? '0') + BigInt(pendingRoi)).toString();
-            } catch {
-                // ignore conversion errors
-            }
-
-            const levelRaw = extractString(infoArr[5]) ?? '0';
+            const originalStaked = extractString(infoArr[0]) ?? '0';
+            const originalUsdLocked = extractString(infoArr[1]) ?? '0';
+            const selfStaked = extractString(infoArr[2]) ?? '0';
+            const selfStakedUsdLocked = extractString(infoArr[3]) ?? '0';
+            const activeBondValue = extractString(infoArr[4]) ?? '0';
+            const lastAccruedAt = extractString(infoArr[5]) ?? '0';
+            const referrer = (infoArr[6] as string) ?? ZERO_ADDRESS;
+            const directsParsed = Number(extractString(infoArr[7]) ?? '0');
+            const directs = Number.isNaN(directsParsed) ? 0 : directsParsed;
+            const levelRaw = extractString(infoArr[8]) ?? '0';
             let level = 0;
             try {
                 const lvl = BigInt(levelRaw);
@@ -848,22 +985,40 @@ export function useStakingContract() {
             } catch {
                 level = 0;
             }
-            const rankRaw = extractString(infoArr[6]) ?? '0';
+            const rankRaw = extractString(infoArr[9]) ?? '0';
             const rank = Number(rankRaw);
-            const totalReferralIncome = extractString(infoArr[9]) ?? '0';
-            const lastAccruedAt = extractString(infoArr[2]) ?? '0';
-            const referrer = (infoArr[3] as string) ?? ZERO_ADDRESS;
-            const directsParsed = Number(extractString(infoArr[4]) ?? '0');
-            const directs = Number.isNaN(directsParsed) ? 0 : directsParsed;
+            const totalRoiEarned = extractString(infoArr[10]) ?? '0';
+            const totalLevelRewardEarned = extractString(infoArr[11]) ?? '0';
+            const totalReferralIncome = extractString(infoArr[12]) ?? '0';
+            const totalWithdrawn = extractString(infoArr[13]) ?? '0';
+            const pendingRoi = extractString(pendingRaw) ?? '0';
+
+            let stakeWithAccrued = selfStaked;
+            try {
+                stakeWithAccrued = (
+                    BigInt(selfStaked) +
+                    BigInt(activeBondValue ?? '0') +
+                    BigInt(pendingRoi)
+                ).toString();
+            } catch {
+                // ignore conversion errors
+            }
 
             return {
                 address: addr,
+                originalStaked,
+                originalUsdLocked,
                 selfStaked,
+                selfStakedUsdLocked,
+                activeBondValue,
                 stakeWithAccrued,
                 pendingRoi,
                 level,
                 referralIncome: '0',
                 totalReferralIncome,
+                totalRoiEarned,
+                totalLevelRewardEarned,
+                totalWithdrawn,
                 rank: Number.isNaN(rank) || rank <= 0 ? undefined : rank,
                 referrer,
                 referrerShort: shortenAddress(referrer),
@@ -966,7 +1121,7 @@ export function useStakingContract() {
             const result = await readContractSafe<unknown>({
                 address: CONTRACT_ADDRESS,
                 abi: CONTRACT_ABI,
-                functionName: 'totalUsers',
+                functionName: 'getTotalUsers',
                 chainId: supportedChainId,
             });
             const total = Number(extractString(result) ?? '0');
@@ -1809,6 +1964,8 @@ export function useStakingContract() {
         withdrawBond,
         blockUser: blockUserAddress,
         unblockUser: unblockUserAddress,
+        fundCompanyPool,
+        transferOwnership,
         fetchUserLevelIncome,
         fetchUserActivity,
         mapHistoryEntries,
