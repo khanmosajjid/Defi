@@ -480,7 +480,7 @@ export default function Dashboard() {
   } = useStakingContract();
 
   // derive user-facing stats from on-chain data
-  const formatWeiToETN = (weiStr?: string) => {
+  const formatWeiToETN = useCallback((weiStr?: string) => {
     try {
       if (!weiStr) return "0";
       const bn = BigInt(weiStr);
@@ -488,7 +488,7 @@ export default function Dashboard() {
     } catch {
       return "0";
     }
-  };
+  }, []);
 
   const userStats = {
     totalBalance: `${formatWeiToETN(tokenBalance)} ETN`,
@@ -829,6 +829,74 @@ export default function Dashboard() {
   useEffect(() => {
     void loadTeam();
   }, [loadTeam]);
+
+  const teamIncomeSummary = useMemo(() => {
+    const availableTeamLevels = Object.keys(teamDetailsByLevel)
+      .map((lvl) => Number(lvl))
+      .filter((lvl) => Number.isFinite(lvl) && lvl > 0);
+    const highestTeamLevel = availableTeamLevels.length
+      ? Math.max(...availableTeamLevels)
+      : 0;
+    const highestIncomeLevel = levelIncomeDisplay.length;
+    const highestLevel = Math.max(highestTeamLevel, highestIncomeLevel);
+
+    if (highestLevel === 0) {
+      return {
+        rows: [] as Array<{
+          level: number;
+          members: number;
+          incomeWei: bigint;
+        }>,
+        totalIncomeWei: 0n,
+      };
+    }
+
+    const rows: Array<{ level: number; members: number; incomeWei: bigint }> =
+      [];
+    let totalIncomeWei = 0n;
+
+    for (let level = 1; level <= highestLevel; level += 1) {
+      const incomeStr = levelIncome?.[level - 1] ?? "0";
+      let incomeWei = 0n;
+      try {
+        incomeWei = BigInt(incomeStr);
+      } catch {
+        incomeWei = 0n;
+      }
+
+      totalIncomeWei += incomeWei;
+
+      rows.push({
+        level,
+        members: teamDetailsByLevel[level]?.length ?? 0,
+        incomeWei,
+      });
+    }
+
+    return { rows, totalIncomeWei };
+  }, [levelIncome, levelIncomeDisplay, teamDetailsByLevel]);
+
+  const { rows: teamIncomeRows, totalIncomeWei: totalTeamIncomeWei } =
+    teamIncomeSummary;
+
+  const totalTeamIncomeDisplay = useMemo(
+    () => formatWeiToETN(totalTeamIncomeWei.toString()),
+    [formatWeiToETN, totalTeamIncomeWei]
+  );
+
+  const derivedTeamMemberTotal = useMemo(
+    () => teamIncomeRows.reduce((acc, row) => acc + row.members, 0),
+    [teamIncomeRows]
+  );
+
+  const totalTeamMembersDisplay = useMemo(() => {
+    const fallback = derivedTeamMemberTotal;
+    const numericTeamSize =
+      typeof teamSize === "number" && Number.isFinite(teamSize) && teamSize >= 0
+        ? teamSize
+        : fallback;
+    return numericTeamSize.toLocaleString();
+  }, [derivedTeamMemberTotal, teamSize]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -1222,6 +1290,69 @@ export default function Dashboard() {
                               );
                             })}
                           </ul>
+                        )}
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm text-gray-400">
+                            Team income summary
+                          </p>
+                          <span className="text-xs text-gray-500">
+                            Total team size:
+                            <span className="ml-1 text-yellow-400">
+                              {totalTeamMembersDisplay}
+                            </span>
+                          </span>
+                        </div>
+                        {teamIncomeRows.length === 0 ? (
+                          <p className="text-gray-500">
+                            No team data available yet
+                          </p>
+                        ) : (
+                          <div className="overflow-x-auto rounded border border-yellow-500/20 bg-gray-900/60">
+                            <table className="min-w-full text-sm">
+                              <thead>
+                                <tr className="text-left text-gray-400 border-b border-gray-800">
+                                  <th className="py-2 px-3">Level</th>
+                                  <th className="py-2 px-3">Members</th>
+                                  <th className="py-2 px-3">
+                                    Team Income (ETN)
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {teamIncomeRows.map((row) => (
+                                  <tr
+                                    key={`team-income-${row.level}`}
+                                    className="border-b border-gray-900/80"
+                                  >
+                                    <td className="py-2 px-3 text-gray-200">
+                                      L{row.level}
+                                    </td>
+                                    <td className="py-2 px-3 text-yellow-300">
+                                      {row.members.toLocaleString()}
+                                    </td>
+                                    <td className="py-2 px-3 text-yellow-300">
+                                      {`${formatWeiToETN(
+                                        row.incomeWei.toString()
+                                      )} ETN`}
+                                    </td>
+                                  </tr>
+                                ))}
+                                <tr className="bg-black/40">
+                                  <td className="py-2 px-3 text-gray-300 font-semibold">
+                                    Total
+                                  </td>
+                                  <td className="py-2 px-3 text-yellow-300 font-semibold">
+                                    {totalTeamMembersDisplay}
+                                  </td>
+                                  <td className="py-2 px-3 text-yellow-300 font-semibold">
+                                    {`${totalTeamIncomeDisplay} ETN`}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
                       {/* Daily Level Income */}

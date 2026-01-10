@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAccount, useChainId, useReadContract } from 'wagmi';
 import type { Abi } from 'abitype';
 import { toast } from 'react-hot-toast';
-import { parseAbiItem, parseEther } from 'viem';
+import { parseAbiItem, parseEther, parseUnits } from 'viem';
 import { readContract, getPublicClient } from '@wagmi/core';
 
 import { writeAndWaitForReceipt } from '@/lib/wagmiWrite';
@@ -571,6 +571,19 @@ export function useStakingContract() {
         }
     }, [pairReservesRaw, pairToken0Address, pairToken1Address, token0DecimalsRaw, token1DecimalsRaw]);
 
+    const dailyRatePercent = useMemo(() => {
+        if (!dailyRateRaw) return '0.000';
+        try {
+            const rate = BigInt(dailyRateRaw.toString());
+            const fraction = Number.parseFloat(formatUnits(rate, 18));
+            if (!Number.isFinite(fraction)) return '0.000';
+            return (fraction * 100).toFixed(3);
+        } catch (error) {
+            console.error('dailyRatePercent compute failed', error);
+            return '0.000';
+        }
+    }, [dailyRateRaw]);
+
     const pendingRewards = userReport?.pendingRoi ?? '0';
     const pendingRewardsHuman = formatUnits(pendingRewards, 18);
 
@@ -886,6 +899,59 @@ export function useStakingContract() {
         }
     }
 
+    async function setDailyRatePercent(ratePercent: string) {
+        const txToast = toast.loading('Updating daily rate...');
+        try {
+            const trimmed = ratePercent.trim();
+            if (!trimmed) throw new Error('Enter a daily rate percentage');
+            if (!/^\d*(\.\d+)?$/u.test(trimmed)) {
+                throw new Error('Daily rate must be a positive number');
+            }
+            const parsed = Number.parseFloat(trimmed);
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                throw new Error('Daily rate must be greater than zero');
+            }
+            const rate18 = parseUnits(trimmed, 16);
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'setDailyRate',
+                args: [rate18],
+            });
+            toast.success('Daily rate updated', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('setDailyRate error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function batchCompoundAllUsersRange(fromIndex: number, toIndex: number) {
+        const txToast = toast.loading('Batch compounding users...');
+        try {
+            if (!Number.isInteger(fromIndex) || fromIndex < 0) {
+                throw new Error('From index must be a non-negative integer');
+            }
+            if (!Number.isInteger(toIndex) || toIndex <= fromIndex) {
+                throw new Error('To index must be greater than from index');
+            }
+
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'batchCompoundAllUsers',
+                args: [BigInt(fromIndex), BigInt(toIndex)],
+            });
+            toast.success('Batch compounding complete', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('batchCompoundAllUsers error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
     async function fundCompanyPool(amount: string) {
         const txToast = toast.loading('Funding company pool...');
         try {
@@ -908,6 +974,47 @@ export function useStakingContract() {
             return receipt;
         } catch (err) {
             console.error('fundCompanyPool error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function emergencyWithdrawTokens(to: `0x${string}`, amount: string) {
+        const txToast = toast.loading('Executing emergency withdraw...');
+        try {
+            const trimmedAmount = amount.trim();
+            if (!trimmedAmount) throw new Error('Enter an amount to withdraw');
+            const amountWei = parseEther(trimmedAmount);
+            if (amountWei <= 0n) throw new Error('Amount must be greater than zero');
+
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'emergencyWithdraw',
+                args: [to, amountWei],
+            });
+            toast.success('Emergency withdraw submitted', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('emergencyWithdraw error', err);
+            toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function emergencyResetUser(user: `0x${string}`) {
+        const txToast = toast.loading('Resetting user data...');
+        try {
+            const receipt = await writeAndWaitForReceipt({
+                abi: CONTRACT_ABI as Abi,
+                address: CONTRACT_ADDRESS,
+                functionName: 'emergenceySetUserData',
+                args: [user],
+            });
+            toast.success('User data reset', { id: txToast });
+            return receipt;
+        } catch (err) {
+            console.error('emergencyResetUser error', err);
             toast.error(getErrorMessage(err), { id: txToast });
             throw err;
         }
@@ -1936,6 +2043,7 @@ export function useStakingContract() {
         tokenAllowance,
         manualTokenPrice,
         tokenPriceUsd,
+        dailyRatePercent,
         userInfo,
         userReport,
         userLevel,
@@ -1964,7 +2072,11 @@ export function useStakingContract() {
         withdrawBond,
         blockUser: blockUserAddress,
         unblockUser: unblockUserAddress,
+        setDailyRatePercent,
+        batchCompoundAllUsers: batchCompoundAllUsersRange,
         fundCompanyPool,
+        emergencyWithdrawTokens,
+        emergencyResetUser,
         transferOwnership,
         fetchUserLevelIncome,
         fetchUserActivity,

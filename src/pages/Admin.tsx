@@ -14,6 +14,9 @@ import {
 import CONTRACT_ABI from "@/service/stakingABI.json";
 
 const PAGE_SIZE = 25;
+const ADMIN_ALLOWLIST = new Set<string>([
+  "0xac338cd590a0811fff159ca9bf0f76bc8249aaa2",
+]);
 
 function formatTokenAmount(
   value?: string | bigint | null,
@@ -60,21 +63,33 @@ const Admin = () => {
     functionName: "owner",
   });
 
-  const isAdmin = useMemo(() => {
+  const isOwnerAccount = useMemo(() => {
     if (!connectedAddress || !ownerAddress) return false;
     return ownerAddress.toLowerCase() === connectedAddress.toLowerCase();
+  }, [connectedAddress, ownerAddress]);
+
+  const hasPanelAccess = useMemo(() => {
+    if (!connectedAddress) return false;
+    const lowered = connectedAddress.toLowerCase();
+    if (ownerAddress && lowered === ownerAddress.toLowerCase()) return true;
+    return ADMIN_ALLOWLIST.has(lowered);
   }, [connectedAddress, ownerAddress]);
 
   const {
     totalStaked,
     tokenPriceUsd,
     manualTokenPrice,
+    dailyRatePercent,
     fetchUsersBatch,
     fetchMemberDetails,
     fetchCompanyPoolStatus,
     blockUser: blockUserOnChain,
     unblockUser: unblockUserOnChain,
+    setDailyRatePercent,
+    batchCompoundAllUsers,
     fundCompanyPool,
+    emergencyWithdrawTokens,
+    emergencyResetUser,
     transferOwnership,
     fetchUserRoiHistory,
   } = useStakingContract();
@@ -108,6 +123,16 @@ const Admin = () => {
   const [fundingPool, setFundingPool] = useState(false);
   const [ownershipAddressInput, setOwnershipAddressInput] = useState("");
   const [transferringOwnership, setTransferringOwnership] = useState(false);
+  const [dailyRateInput, setDailyRateInput] = useState("");
+  const [updatingDailyRate, setUpdatingDailyRate] = useState(false);
+  const [compoundFrom, setCompoundFrom] = useState("");
+  const [compoundTo, setCompoundTo] = useState("");
+  const [compoundingRange, setCompoundingRange] = useState(false);
+  const [emergencyWithdrawAddress, setEmergencyWithdrawAddress] = useState("");
+  const [emergencyWithdrawAmount, setEmergencyWithdrawAmount] = useState("");
+  const [withdrawingEmergency, setWithdrawingEmergency] = useState(false);
+  const [resetUserAddress, setResetUserAddress] = useState("");
+  const [resettingUser, setResettingUser] = useState(false);
 
   const manageAddressIsValid = useMemo(
     () => Boolean(normalizeAddress(manageUserAddress)),
@@ -156,7 +181,7 @@ const Admin = () => {
   }, [tokenPriceSource]);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!hasPanelAccess) {
       setUsers([]);
       setTotalUsers(0);
       setPageIndex(0);
@@ -168,11 +193,19 @@ const Admin = () => {
       setRoiHistory([]);
       setRoiError(null);
       setRoiLoading(false);
+      setFundAmount("");
+      setOwnershipAddressInput("");
+      setDailyRateInput("");
+      setCompoundFrom("");
+      setCompoundTo("");
+      setEmergencyWithdrawAddress("");
+      setEmergencyWithdrawAmount("");
+      setResetUserAddress("");
     }
-  }, [isAdmin]);
+  }, [hasPanelAccess]);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!hasPanelAccess) {
       setRoiHistory([]);
       setRoiError(null);
       setRoiLoading(false);
@@ -214,10 +247,10 @@ const Admin = () => {
     return () => {
       cancelled = true;
     };
-  }, [fetchUserRoiHistory, isAdmin, searchResult]);
+  }, [fetchUserRoiHistory, hasPanelAccess, searchResult]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!hasPanelAccess) return;
     let cancelled = false;
     setPoolLoading(true);
     fetchCompanyPoolStatus()
@@ -236,10 +269,10 @@ const Admin = () => {
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, fetchCompanyPoolStatus]);
+  }, [hasPanelAccess, fetchCompanyPoolStatus]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!hasPanelAccess) return;
     let cancelled = false;
     setTableLoading(true);
     fetchUsersBatch(pageIndex * PAGE_SIZE, PAGE_SIZE)
@@ -263,7 +296,7 @@ const Admin = () => {
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, pageIndex, fetchUsersBatch]);
+  }, [hasPanelAccess, pageIndex, fetchUsersBatch]);
 
   const handleSearch = async () => {
     const normalized = normalizeAddress(searchValue);
@@ -285,6 +318,10 @@ const Admin = () => {
   };
 
   const handleBlockUser = async () => {
+    if (!isOwnerAccount) {
+      toast.error("Only the contract owner can manage users");
+      return;
+    }
     const normalized = normalizeAddress(manageUserAddress);
     if (!normalized) {
       toast.error("Enter a valid wallet address to manage");
@@ -302,6 +339,10 @@ const Admin = () => {
   };
 
   const handleUnblockUser = async () => {
+    if (!isOwnerAccount) {
+      toast.error("Only the contract owner can manage users");
+      return;
+    }
     const normalized = normalizeAddress(manageUserAddress);
     if (!normalized) {
       toast.error("Enter a valid wallet address to manage");
@@ -320,7 +361,7 @@ const Admin = () => {
 
   const handleFundCompanyPool = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isAdmin) {
+    if (!isOwnerAccount) {
       toast.error("Only the contract owner can fund the pool");
       return;
     }
@@ -351,7 +392,7 @@ const Admin = () => {
 
   const handleTransferOwnership = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isAdmin) {
+    if (!isOwnerAccount) {
       toast.error("Only the current owner can transfer ownership");
       return;
     }
@@ -383,6 +424,119 @@ const Admin = () => {
       console.error("transferOwnership failed", error);
     } finally {
       setTransferringOwnership(false);
+    }
+  };
+
+  const handleSetDailyRate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isOwnerAccount) {
+      toast.error("Only the contract owner can update the daily rate");
+      return;
+    }
+
+    const trimmed = dailyRateInput.trim();
+    if (!trimmed) {
+      toast.error("Enter a daily rate percentage");
+      return;
+    }
+
+    setUpdatingDailyRate(true);
+    try {
+      await setDailyRatePercent(trimmed);
+      setDailyRateInput("");
+    } catch (error) {
+      console.error("setDailyRatePercent failed", error);
+    } finally {
+      setUpdatingDailyRate(false);
+    }
+  };
+
+  const handleBatchCompound = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isOwnerAccount) {
+      toast.error("Only the contract owner can compound all users");
+      return;
+    }
+
+    const from = Number.parseInt(compoundFrom.trim(), 10);
+    const to = Number.parseInt(compoundTo.trim(), 10);
+
+    if (!Number.isInteger(from) || from < 0) {
+      toast.error("Enter a valid start index");
+      return;
+    }
+
+    if (!Number.isInteger(to) || to <= from) {
+      toast.error("End index must be greater than start index");
+      return;
+    }
+
+    setCompoundingRange(true);
+    try {
+      await batchCompoundAllUsers(from, to);
+      setCompoundFrom("");
+      setCompoundTo("");
+    } catch (error) {
+      console.error("batchCompoundAllUsers failed", error);
+    } finally {
+      setCompoundingRange(false);
+    }
+  };
+
+  const handleEmergencyWithdraw = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isOwnerAccount) {
+      toast.error("Only the contract owner can withdraw funds");
+      return;
+    }
+
+    const normalized = normalizeAddress(emergencyWithdrawAddress);
+    if (!normalized) {
+      toast.error("Enter a valid target wallet");
+      return;
+    }
+
+    const amount = emergencyWithdrawAmount.trim();
+    if (!amount) {
+      toast.error("Enter an ETN amount");
+      return;
+    }
+
+    setWithdrawingEmergency(true);
+    try {
+      await emergencyWithdrawTokens(normalized as `0x${string}`, amount);
+      setEmergencyWithdrawAmount("");
+      setEmergencyWithdrawAddress("");
+    } catch (error) {
+      console.error("emergencyWithdrawTokens failed", error);
+    } finally {
+      setWithdrawingEmergency(false);
+    }
+  };
+
+  const handleEmergencyResetUser = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    if (!isOwnerAccount) {
+      toast.error("Only the contract owner can reset user data");
+      return;
+    }
+
+    const normalized = normalizeAddress(resetUserAddress);
+    if (!normalized) {
+      toast.error("Enter a valid wallet address");
+      return;
+    }
+
+    setResettingUser(true);
+    try {
+      await emergencyResetUser(normalized as `0x${string}`);
+      setResetUserAddress("");
+    } catch (error) {
+      console.error("emergencyResetUser failed", error);
+    } finally {
+      setResettingUser(false);
     }
   };
 
@@ -493,11 +647,11 @@ const Admin = () => {
     );
   }
 
-  if (!isAdmin) {
+  if (!hasPanelAccess) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <p className="text-lg text-red-400">
-          Access restricted to the contract admin.
+          Access restricted to the contract owner or approved admin wallet.
         </p>
       </div>
     );
@@ -515,8 +669,8 @@ const Admin = () => {
               Admin Control Center
             </h1>
             <p className="text-sm text-gray-400">
-              Overview of all ETHAN users and contract health. Only the contract
-              owner can access this page.
+              Overview of all ETHAN users and contract health. Access is limited
+              to the owner and approved admin wallets.
             </p>
           </div>
           <div className="text-xs text-gray-500 bg-gray-900/80 border border-yellow-500/20 rounded px-3 py-2">
@@ -524,6 +678,13 @@ const Admin = () => {
             <div className="text-yellow-400 break-all">{connectedAddress}</div>
           </div>
         </div>
+
+        {!isOwnerAccount ? (
+          <div className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded px-3 py-2">
+            Write operations require the contract owner wallet; read-only
+            features remain available.
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
@@ -605,7 +766,7 @@ const Admin = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
             <CardHeader>
               <CardTitle className="text-sm text-gray-400">
@@ -618,13 +779,13 @@ const Admin = () => {
                   placeholder="Amount in ETN"
                   value={fundAmount}
                   onChange={(event) => setFundAmount(event.target.value)}
-                  disabled={fundingPool || !isAdmin}
+                  disabled={fundingPool || !isOwnerAccount}
                   className="input-bg border-gray-700 text-white"
                 />
                 <Button
                   type="submit"
                   className="bg-yellow-500 text-black font-semibold"
-                  disabled={fundingPool || !isAdmin}
+                  disabled={fundingPool || !isOwnerAccount}
                 >
                   {fundingPool ? "Funding…" : "Fund Pool"}
                 </Button>
@@ -654,18 +815,163 @@ const Admin = () => {
                   onChange={(event) =>
                     setOwnershipAddressInput(event.target.value)
                   }
-                  disabled={transferringOwnership || !isAdmin}
+                  disabled={transferringOwnership || !isOwnerAccount}
                   className="input-bg border-gray-700 text-white"
                 />
                 <Button
                   type="submit"
                   className="bg-yellow-500 text-black font-semibold"
-                  disabled={transferringOwnership || !isAdmin}
+                  disabled={transferringOwnership || !isOwnerAccount}
                 >
                   {transferringOwnership ? "Transferring…" : "Transfer"}
                 </Button>
                 <p className="text-xs text-gray-500">
                   Executes the contract ownership transfer transaction.
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                Update Daily Rate
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-gray-500 mb-3">
+                <div>Current Daily Rate</div>
+                <div className="text-yellow-400 text-base">
+                  {dailyRatePercent}%
+                </div>
+              </div>
+              <form className="space-y-3" onSubmit={handleSetDailyRate}>
+                <Input
+                  placeholder="Daily rate (%)"
+                  value={dailyRateInput}
+                  onChange={(event) => setDailyRateInput(event.target.value)}
+                  disabled={updatingDailyRate || !isOwnerAccount}
+                  className="input-bg border-gray-700 text-white"
+                />
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={updatingDailyRate || !isOwnerAccount}
+                >
+                  {updatingDailyRate ? "Updating…" : "Update"}
+                </Button>
+                <p className="text-xs text-gray-500">
+                  Enter the daily ROI percentage (e.g. 0.8 for 0.8%).
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                Batch Compound Users
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleBatchCompound}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    placeholder="From index"
+                    value={compoundFrom}
+                    onChange={(event) => setCompoundFrom(event.target.value)}
+                    disabled={compoundingRange || !isOwnerAccount}
+                    className="input-bg border-gray-700 text-white"
+                  />
+                  <Input
+                    placeholder="To index"
+                    value={compoundTo}
+                    onChange={(event) => setCompoundTo(event.target.value)}
+                    disabled={compoundingRange || !isOwnerAccount}
+                    className="input-bg border-gray-700 text-white"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={compoundingRange || !isOwnerAccount}
+                >
+                  {compoundingRange ? "Compounding…" : "Compound"}
+                </Button>
+                <p className="text-xs text-gray-500">
+                  Applies auto-compounding for users within the specified index
+                  range (exclusive upper bound).
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                Emergency Withdraw
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleEmergencyWithdraw}>
+                <Input
+                  placeholder="Recipient wallet (0x…)"
+                  value={emergencyWithdrawAddress}
+                  onChange={(event) =>
+                    setEmergencyWithdrawAddress(event.target.value)
+                  }
+                  disabled={withdrawingEmergency || !isOwnerAccount}
+                  className="input-bg border-gray-700 text-white"
+                />
+                <Input
+                  placeholder="Amount in ETN"
+                  value={emergencyWithdrawAmount}
+                  onChange={(event) =>
+                    setEmergencyWithdrawAmount(event.target.value)
+                  }
+                  disabled={withdrawingEmergency || !isOwnerAccount}
+                  className="input-bg border-gray-700 text-white"
+                />
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={withdrawingEmergency || !isOwnerAccount}
+                >
+                  {withdrawingEmergency ? "Withdrawing…" : "Withdraw"}
+                </Button>
+                <p className="text-xs text-gray-500">
+                  Transfers ETN from the contract to the specified address.
+                </p>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+            <CardHeader>
+              <CardTitle className="text-sm text-gray-400">
+                Reset User (Emergency)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleEmergencyResetUser}>
+                <Input
+                  placeholder="User wallet (0x…)"
+                  value={resetUserAddress}
+                  onChange={(event) => setResetUserAddress(event.target.value)}
+                  disabled={resettingUser || !isOwnerAccount}
+                  className="input-bg border-gray-700 text-white"
+                />
+                <Button
+                  type="submit"
+                  className="bg-yellow-500 text-black font-semibold"
+                  disabled={resettingUser || !isOwnerAccount}
+                >
+                  {resettingUser ? "Resetting…" : "Reset User"}
+                </Button>
+                <p className="text-xs text-gray-500">
+                  Clears on-chain stake balances for troubleshooting.
                 </p>
               </form>
             </CardContent>
@@ -905,7 +1211,9 @@ const Admin = () => {
                 type="button"
                 className="bg-red-600 hover:bg-red-500 text-white font-semibold"
                 onClick={handleBlockUser}
-                disabled={!manageAddressIsValid || manageBusy}
+                disabled={
+                  !manageAddressIsValid || manageBusy || !isOwnerAccount
+                }
               >
                 {manageAction === "block" ? "Blocking…" : "Block User"}
               </Button>
@@ -913,7 +1221,9 @@ const Admin = () => {
                 type="button"
                 className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold"
                 onClick={handleUnblockUser}
-                disabled={!manageAddressIsValid || manageBusy}
+                disabled={
+                  !manageAddressIsValid || manageBusy || !isOwnerAccount
+                }
               >
                 {manageAction === "unblock" ? "Unblocking…" : "Unblock User"}
               </Button>
