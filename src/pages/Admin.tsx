@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +22,7 @@ import CONTRACT_ABI from "@/service/stakingABI.json";
 const PAGE_SIZE = 25;
 const ADMIN_ALLOWLIST = new Set<string>([
   "0xac338cd590a0811fff159ca9bf0f76bc8249aaa2",
+  "0xa367c6792f73489d734d00f8c5cf860801304cc6",
 ]);
 
 function formatTokenAmount(
@@ -63,17 +70,23 @@ const Admin = () => {
     functionName: "owner",
   });
 
+  const ownerAddressString = useMemo(
+    () => (typeof ownerAddress === "string" ? ownerAddress : undefined),
+    [ownerAddress]
+  );
+
   const isOwnerAccount = useMemo(() => {
-    if (!connectedAddress || !ownerAddress) return false;
-    return ownerAddress.toLowerCase() === connectedAddress.toLowerCase();
-  }, [connectedAddress, ownerAddress]);
+    if (!connectedAddress || !ownerAddressString) return false;
+    return ownerAddressString.toLowerCase() === connectedAddress.toLowerCase();
+  }, [connectedAddress, ownerAddressString]);
 
   const hasPanelAccess = useMemo(() => {
     if (!connectedAddress) return false;
     const lowered = connectedAddress.toLowerCase();
-    if (ownerAddress && lowered === ownerAddress.toLowerCase()) return true;
+    if (ownerAddressString && lowered === ownerAddressString.toLowerCase())
+      return true;
     return ADMIN_ALLOWLIST.has(lowered);
-  }, [connectedAddress, ownerAddress]);
+  }, [connectedAddress, ownerAddressString]);
 
   const {
     totalStaked,
@@ -91,7 +104,12 @@ const Admin = () => {
     emergencyWithdrawTokens,
     emergencyResetUser,
     transferOwnership,
+    fetchUserLevelIncome,
     fetchUserRoiHistory,
+    fetchUserBondSnapshot,
+    fetchStakeHistory,
+    fetchUnstakeHistory,
+    fetchTeamSize,
   } = useStakingContract();
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -114,6 +132,11 @@ const Admin = () => {
   const [exportingUsers, setExportingUsers] = useState(false);
   const [exportPayload, setExportPayload] = useState<string | null>(null);
   const [copyingExport, setCopyingExport] = useState(false);
+  const [exportingBonds, setExportingBonds] = useState(false);
+  const [bondExportPayload, setBondExportPayload] = useState<string | null>(
+    null
+  );
+  const [copyingBondExport, setCopyingBondExport] = useState(false);
   const [roiHistory, setRoiHistory] = useState<
     Array<{ day: number; timestamp: number; amount: string }>
   >([]);
@@ -133,12 +156,111 @@ const Admin = () => {
   const [withdrawingEmergency, setWithdrawingEmergency] = useState(false);
   const [resetUserAddress, setResetUserAddress] = useState("");
   const [resettingUser, setResettingUser] = useState(false);
+  const [readAddressInput, setReadAddressInput] = useState("");
+  const [readOutputs, setReadOutputs] = useState<Record<string, string>>({});
+  const [readErrors, setReadErrors] = useState<Record<string, string | null>>(
+    {}
+  );
+  const [readLoadingId, setReadLoadingId] = useState<string | null>(null);
+
+  const formatReadResult = useCallback((value: unknown) => {
+    try {
+      return JSON.stringify(
+        value,
+        (_key, item) => (typeof item === "bigint" ? item.toString() : item),
+        2
+      );
+    } catch {
+      try {
+        return JSON.stringify(String(value), null, 2);
+      } catch {
+        return String(value);
+      }
+    }
+  }, []);
 
   const manageAddressIsValid = useMemo(
     () => Boolean(normalizeAddress(manageUserAddress)),
     [manageUserAddress]
   );
   const manageBusy = manageAction !== null;
+
+  const readFunctionDefs = useMemo(
+    () => [
+      {
+        id: "userSummary",
+        label: "User Summary",
+        description: "users(address)",
+        run: async (wallet: `0x${string}`) => {
+          const details = await fetchMemberDetails([wallet]);
+          return details[0] ?? null;
+        },
+      },
+      {
+        id: "teamSize",
+        label: "Team Size",
+        description: "getTeamSize(address)",
+        run: async (wallet: `0x${string}`) => {
+          const total = await fetchTeamSize(wallet);
+          return { wallet, total };
+        },
+      },
+      {
+        id: "levelIncome",
+        label: "Level Income",
+        description: "levelIncome(address, levelIndex)",
+        run: async (wallet: `0x${string}`) => {
+          const income = await fetchUserLevelIncome(wallet);
+          return income.map((amount, index) => ({ level: index + 1, amount }));
+        },
+      },
+      {
+        id: "bondSnapshot",
+        label: "Bond Snapshot",
+        description: "userBonds(address, index)",
+        run: async (wallet: `0x${string}`) => {
+          const snapshot = await fetchUserBondSnapshot(wallet);
+          return snapshot;
+        },
+      },
+      {
+        id: "stakeHistory",
+        label: "Stake History",
+        description: "getStakeHistory(address) filtered by stake",
+        run: async (wallet: `0x${string}`) => {
+          const page = await fetchStakeHistory({ wallet, pageSize: 50 });
+          return page;
+        },
+      },
+      {
+        id: "unstakeHistory",
+        label: "Unstake History",
+        description: "getStakeHistory(address) filtered by unstake",
+        run: async (wallet: `0x${string}`) => {
+          const page = await fetchUnstakeHistory({ wallet, pageSize: 50 });
+          return page;
+        },
+      },
+      {
+        id: "roiHistory",
+        label: "ROI History",
+        description: "roiHistory(address, index)",
+        run: async (wallet: `0x${string}`) => {
+          const history = await fetchUserRoiHistory(wallet);
+          return history;
+        },
+      },
+    ],
+    [
+      fetchMemberDetails,
+      fetchTeamSize,
+      fetchUserLevelIncome,
+      fetchUserBondSnapshot,
+      fetchStakeHistory,
+      fetchUnstakeHistory,
+      fetchUserRoiHistory,
+    ]
+  );
 
   const totalStakedWei = useMemo(() => {
     if (typeof totalStaked === "bigint") return totalStaked;
@@ -158,9 +280,9 @@ const Admin = () => {
 
   const ownerDisplay = useMemo(() => {
     if (ownerLoading) return "…";
-    if (!ownerAddress) return "Unknown";
-    return ownerAddress;
-  }, [ownerAddress, ownerLoading]);
+    if (!ownerAddressString) return "Unknown";
+    return ownerAddressString;
+  }, [ownerAddressString, ownerLoading]);
 
   const tokenPriceSource = useMemo(() => {
     if (tokenPriceUsd && tokenPriceUsd !== "0") return tokenPriceUsd;
@@ -179,6 +301,46 @@ const Admin = () => {
       return "N/A";
     }
   }, [tokenPriceSource]);
+
+  const readAddressIsValid = useMemo(
+    () => Boolean(normalizeAddress(readAddressInput)),
+    [readAddressInput]
+  );
+
+  const handleRunReadFunction = useCallback(
+    async (functionId: string) => {
+      const normalized = normalizeAddress(readAddressInput);
+      if (!normalized) {
+        toast.error("Enter a valid wallet address");
+        return;
+      }
+
+      const definition = readFunctionDefs.find(
+        (entry) => entry.id === functionId
+      );
+      if (!definition) return;
+
+      setReadLoadingId(functionId);
+      try {
+        const result = await definition.run(normalized as `0x${string}`);
+        const formatted = formatReadResult(result);
+        setReadOutputs((prev) => ({ ...prev, [functionId]: formatted }));
+        setReadErrors((prev) => ({ ...prev, [functionId]: null }));
+      } catch (error) {
+        console.error(`read function ${functionId} failed`, error);
+        setReadErrors((prev) => ({
+          ...prev,
+          [functionId]:
+            error instanceof Error
+              ? error.message
+              : "Failed to run read function",
+        }));
+      } finally {
+        setReadLoadingId(null);
+      }
+    },
+    [formatReadResult, readAddressInput, readFunctionDefs]
+  );
 
   useEffect(() => {
     if (!hasPanelAccess) {
@@ -201,8 +363,17 @@ const Admin = () => {
       setEmergencyWithdrawAddress("");
       setEmergencyWithdrawAmount("");
       setResetUserAddress("");
+      setBondExportPayload(null);
+      setCopyingBondExport(false);
+      setExportingBonds(false);
     }
   }, [hasPanelAccess]);
+
+  useEffect(() => {
+    if (searchResult?.address) {
+      setReadAddressInput(searchResult.address);
+    }
+  }, [searchResult?.address]);
 
   useEffect(() => {
     if (!hasPanelAccess) {
@@ -297,6 +468,44 @@ const Admin = () => {
       cancelled = true;
     };
   }, [hasPanelAccess, pageIndex, fetchUsersBatch]);
+
+  const collectAllUsers = useCallback(async () => {
+    const aggregated: DirectDetail[] = [];
+    const seen = new Set<string>();
+    let offset = 0;
+    let expectedTotal: number | null = null;
+
+    while (true) {
+      const page = await fetchUsersBatch(offset, PAGE_SIZE);
+      if (expectedTotal == null) {
+        expectedTotal = page.total;
+      }
+
+      if (!page.items.length) {
+        break;
+      }
+
+      page.items.forEach((entry) => {
+        const key = entry.address?.toLowerCase?.() ?? "";
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        aggregated.push(entry);
+      });
+
+      offset += page.items.length;
+
+      const targetTotal = expectedTotal ?? Number.MAX_SAFE_INTEGER;
+      if (aggregated.length >= targetTotal) {
+        break;
+      }
+
+      if (page.items.length < PAGE_SIZE) {
+        break;
+      }
+    }
+
+    return aggregated;
+  }, [fetchUsersBatch]);
 
   const handleSearch = async () => {
     const normalized = normalizeAddress(searchValue);
@@ -404,8 +613,8 @@ const Admin = () => {
     }
 
     if (
-      ownerAddress &&
-      normalized.toLowerCase() === ownerAddress.toLowerCase()
+      ownerAddressString &&
+      normalized.toLowerCase() === ownerAddressString.toLowerCase()
     ) {
       toast.error("Address is already the owner");
       return;
@@ -567,25 +776,7 @@ const Admin = () => {
     if (exportingUsers) return;
     setExportingUsers(true);
     try {
-      const aggregated: DirectDetail[] = [];
-      let offset = 0;
-      let expectedTotal: number | null = null;
-
-      while (true) {
-        const page = await fetchUsersBatch(offset, PAGE_SIZE);
-        if (expectedTotal == null) {
-          expectedTotal = page.total;
-        }
-        if (!page.items.length) break;
-        aggregated.push(...page.items);
-        offset += page.items.length;
-        if (expectedTotal != null && aggregated.length >= expectedTotal) {
-          break;
-        }
-        if (page.items.length < PAGE_SIZE) {
-          break;
-        }
-      }
+      const aggregated = await collectAllUsers();
 
       const payload = {
         users_: aggregated.map((entry) => entry.address),
@@ -623,6 +814,67 @@ const Admin = () => {
     }
   };
 
+  const handleExportBondCalldata = async () => {
+    if (exportingBonds) return;
+    setExportingBonds(true);
+    try {
+      const aggregated = await collectAllUsers();
+      const entries: Array<{
+        user: string;
+        planIds: number[];
+        principals: string[];
+        rewards: string[];
+        startAts: string[];
+        withdrawnFlags: boolean[];
+      }> = [];
+
+      for (const detail of aggregated) {
+        const normalized = normalizeAddress(detail.address);
+        if (!normalized) continue;
+        try {
+          const snapshot = await fetchUserBondSnapshot(
+            normalized as `0x${string}`
+          );
+          if (snapshot.planIds.length === 0) continue;
+          entries.push({
+            user: normalized,
+            planIds: snapshot.planIds,
+            principals: snapshot.principals,
+            rewards: snapshot.rewards,
+            startAts: snapshot.startAts,
+            withdrawnFlags: snapshot.withdrawnFlags,
+          });
+        } catch (error) {
+          console.error("fetchUserBondSnapshot failed", detail.address, error);
+        }
+      }
+
+      setBondExportPayload(JSON.stringify(entries, null, 2));
+      toast.success(
+        entries.length ? "Bond calldata ready" : "No bonds found to export"
+      );
+    } catch (error) {
+      console.error("handleExportBondCalldata failed", error);
+      toast.error("Failed to build bond calldata");
+    } finally {
+      setExportingBonds(false);
+    }
+  };
+
+  const handleCopyBondExport = async () => {
+    if (!bondExportPayload || copyingBondExport) return;
+    try {
+      setCopyingBondExport(true);
+      await navigator.clipboard.writeText(bondExportPayload);
+      toast.success("Copied bond calldata");
+    } catch (error) {
+      console.error("copy bond export payload failed", error);
+      toast.error("Failed to copy bond arrays");
+    } finally {
+      setCopyingBondExport(false);
+    }
+  };
+
   const pageStart = totalUsers === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
   const pageEnd =
     totalUsers === 0 ? 0 : Math.min(totalUsers, (pageIndex + 1) * PAGE_SIZE);
@@ -639,7 +891,7 @@ const Admin = () => {
     );
   }
 
-  if (ownerLoading || (!ownerAddress && connectedAddress)) {
+  if (ownerLoading || (!ownerAddressString && connectedAddress)) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <p className="text-lg text-gray-300">Verifying admin access…</p>
@@ -1191,6 +1443,77 @@ const Admin = () => {
         <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
           <CardHeader>
             <CardTitle className="text-lg text-yellow-400">
+              Read Function Explorer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <div className="text-xs text-gray-300 uppercase tracking-wide">
+                Target Wallet
+              </div>
+              <Input
+                placeholder="Wallet address (0x…)"
+                value={readAddressInput}
+                onChange={(event) => setReadAddressInput(event.target.value)}
+                className="input-bg border-gray-700 text-white"
+              />
+              <p className="text-xs text-gray-500">
+                Enter any wallet to inspect on-chain read-only outputs provided
+                by the staking contract.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              {readFunctionDefs.map((def) => {
+                const isRunning = readLoadingId === def.id;
+                const errorMessage = readErrors[def.id] ?? null;
+                const output = readOutputs[def.id] ?? "";
+                return (
+                  <div
+                    key={def.id}
+                    className="rounded-lg border border-yellow-500/20 bg-gray-950/60 p-4 space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div>
+                        <div className="text-sm text-yellow-300 font-semibold">
+                          {def.label}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {def.description}
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="border-yellow-500/40 text-yellow-400"
+                        onClick={() => handleRunReadFunction(def.id)}
+                        disabled={!readAddressIsValid || isRunning}
+                      >
+                        {isRunning ? "Running…" : "Run"}
+                      </Button>
+                    </div>
+                    {errorMessage ? (
+                      <p className="text-xs text-red-400">{errorMessage}</p>
+                    ) : null}
+                    {output ? (
+                      <pre className="max-h-64 overflow-auto rounded bg-black/40 p-3 text-xs text-yellow-200 whitespace-pre-wrap">
+                        {output}
+                      </pre>
+                    ) : null}
+                    {!output && !errorMessage ? (
+                      <p className="text-xs text-gray-500">
+                        Run to view the latest response.
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="card-box from-gray-900 to-gray-800 border-yellow-500/20">
+          <CardHeader>
+            <CardTitle className="text-lg text-yellow-400">
               User Access Controls
             </CardTitle>
           </CardHeader>
@@ -1247,14 +1570,24 @@ const Admin = () => {
                     ? "No users registered."
                     : `Showing ${pageStart}-${pageEnd} of ${totalUsers.toLocaleString()} users`}
                 </div>
-                <Button
-                  variant="outline"
-                  className="border-yellow-500/40 text-yellow-400"
-                  disabled={exportingUsers || totalUsers === 0}
-                  onClick={handleExportCalldata}
-                >
-                  {exportingUsers ? "Building…" : "Build calldata arrays"}
-                </Button>
+                <div className="flex gap-2 mt-2 sm:mt-0">
+                  <Button
+                    variant="outline"
+                    className="border-yellow-500/40 text-yellow-400"
+                    disabled={exportingUsers || totalUsers === 0}
+                    onClick={handleExportCalldata}
+                  >
+                    {exportingUsers ? "Building…" : "Build calldata arrays"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-yellow-500/40 text-yellow-400"
+                    disabled={exportingBonds || totalUsers === 0}
+                    onClick={handleExportBondCalldata}
+                  >
+                    {exportingBonds ? "Collecting…" : "Build bond calldata"}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -1414,6 +1747,27 @@ const Admin = () => {
                 </div>
                 <pre className="mt-2 max-h-64 overflow-auto rounded border border-yellow-500/20 bg-gray-950/60 p-3 text-xs text-yellow-200">
                   {exportPayload}
+                </pre>
+              </div>
+            )}
+            {bondExportPayload && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">
+                    Bond Calldata
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-yellow-500/40 text-yellow-400"
+                    onClick={handleCopyBondExport}
+                    disabled={copyingBondExport}
+                  >
+                    {copyingBondExport ? "Copying…" : "Copy JSON"}
+                  </Button>
+                </div>
+                <pre className="mt-2 max-h-64 overflow-auto rounded border border-yellow-500/20 bg-gray-950/60 p-3 text-xs text-yellow-200">
+                  {bondExportPayload}
                 </pre>
               </div>
             )}

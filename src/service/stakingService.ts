@@ -152,6 +152,18 @@ type HistoryEntry = {
     blockNumber?: number;
 };
 
+type StakeHistoryRecord = {
+    action: 'STAKE' | 'UNSTAKE';
+    amount: string;
+    timestamp: number;
+};
+
+type RoiHistoryEntry = {
+    day: number;
+    amount: string;
+    timestamp: number;
+};
+
 function buildEmptyDirectDetail(address: string): DirectDetail {
     return {
         address,
@@ -822,6 +834,67 @@ export function useStakingContract() {
         return bonds;
     }, [supportedChainId, userReport?.bondCount, viewingAddress]);
 
+    const getUserBondCount = useCallback(
+        async (wallet: `0x${string}`) => {
+            try {
+                const report = await readContractSafe<unknown[]>({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'getUserReport',
+                    args: [wallet],
+                    chainId: supportedChainId,
+                });
+                const reportArr = Array.isArray(report) ? report : [];
+                const bondCountRaw = extractString(reportArr[4]) ?? '0';
+                const bondCountNum = Number(bondCountRaw);
+                return Number.isNaN(bondCountNum) ? 0 : bondCountNum;
+            } catch (error) {
+                console.error('getUserBondCount failed', error);
+                return 0;
+            }
+        },
+        [supportedChainId]
+    );
+
+    const fetchUserBondSnapshot = useCallback(
+        async (wallet: `0x${string}`) => {
+            const planIds: number[] = [];
+            const principals: string[] = [];
+            const rewards: string[] = [];
+            const startAts: string[] = [];
+            const withdrawnFlags: boolean[] = [];
+
+            const count = await getUserBondCount(wallet);
+            if (count <= 0) {
+                return { planIds, principals, rewards, startAts, withdrawnFlags };
+            }
+
+            for (let index = 0; index < count; index += 1) {
+                try {
+                    const bond = await readContractSafe<unknown[]>({
+                        address: CONTRACT_ADDRESS,
+                        abi: CONTRACT_ABI,
+                        functionName: 'userBonds',
+                        args: [wallet, BigInt(index)],
+                        chainId: supportedChainId,
+                    });
+                    const [planIdRaw, principalRaw, rewardRaw, startAtRaw, withdrawnRaw] = bond as unknown[];
+                    const planId = Number(extractString(planIdRaw) ?? '0');
+                    planIds.push(Number.isNaN(planId) ? 0 : planId);
+                    principals.push(extractString(principalRaw) ?? '0');
+                    rewards.push(extractString(rewardRaw) ?? '0');
+                    startAts.push(extractString(startAtRaw) ?? '0');
+                    withdrawnFlags.push(Boolean(withdrawnRaw));
+                } catch (error) {
+                    console.error('fetchUserBondSnapshot entry failed', wallet, index, error);
+                }
+            }
+
+            return { planIds, principals, rewards, startAts, withdrawnFlags };
+        },
+        [getUserBondCount, supportedChainId]
+    );
+
     async function buyBond(planId: number, amount: string, referrerOverride?: string) {
         const txToast = toast.loading('Submitting bond purchase...');
         try {
@@ -1038,8 +1111,8 @@ export function useStakingContract() {
         }
     }
 
-    const fetchUserLevelIncome = useCallback(async () => {
-        const targetAddress = viewingAddress;
+    const fetchUserLevelIncome = useCallback(async (wallet?: `0x${string}`) => {
+        const targetAddress = wallet ?? viewingAddress;
         if (!targetAddress) return Array(15).fill('0');
         const results = await Promise.allSettled(
             Array.from({ length: 15 }, (_, i) =>
@@ -1188,40 +1261,33 @@ export function useStakingContract() {
             .map((res) => res.value);
     }, [supportedChainId]);
 
-    const fetchTeamSize = useCallback(async () => {
-        const root = viewingAddress;
-        if (!root) {
-            setTeamSize(0);
+    const fetchTeamSize = useCallback(async (wallet?: `0x${string}`) => {
+        const targetAddress = wallet ?? viewingAddress;
+        if (!targetAddress) {
+            if (!wallet) setTeamSize(0);
             return 0;
         }
 
-        const visited = new Set<string>([root.toLowerCase()]);
-        let total = 0;
-        let currentLevel = await fetchDirectsForAddress(root, userInfo?.directs);
-        let depth = 0;
-        const depthLimit = 10;
-
-        while (currentLevel.length && depth < depthLimit) {
-            depth += 1;
-            const nextLevel: string[] = [];
-            for (const addr of currentLevel) {
-                const normalized = addr.toLowerCase();
-                if (visited.has(normalized)) continue;
-                visited.add(normalized);
-                total += 1;
-                try {
-                    const directs = await fetchDirectsForAddress(addr as `0x${string}`);
-                    nextLevel.push(...directs);
-                } catch (err) {
-                    console.warn('fetchTeamSize direct fetch failed', err);
-                }
+        try {
+            const result = await readContractSafe<unknown>({
+                address: CONTRACT_ADDRESS,
+                abi: CONTRACT_ABI,
+                functionName: 'getTeamSize',
+                args: [targetAddress],
+                chainId: supportedChainId,
+            });
+            const sizeValue = Number(extractString(result) ?? '0');
+            const normalized = Number.isNaN(sizeValue) ? 0 : sizeValue;
+            if (!wallet || (viewingAddress && wallet.toLowerCase() === viewingAddress.toLowerCase())) {
+                setTeamSize(normalized);
             }
-            currentLevel = nextLevel;
+            return normalized;
+        } catch (err) {
+            console.error('fetchTeamSize error', err);
+            if (!wallet) setTeamSize(0);
+            return 0;
         }
-
-        setTeamSize(total);
-        return total;
-    }, [fetchDirectsForAddress, userInfo?.directs, viewingAddress]);
+    }, [supportedChainId, viewingAddress]);
 
     const fetchTotalUsers = useCallback(async () => {
         try {
@@ -1432,59 +1498,6 @@ export function useStakingContract() {
         [fetchDownlinesByLevel, fetchMemberDetails]
     );
 
-    const mapHistoryEntries = useCallback(
-        async (logs: readonly {
-            args?: Record<string, unknown>;
-            blockNumber?: bigint | number | null;
-            transactionHash?: string;
-        }[]
-        ): Promise<HistoryEntry[]> => {
-            if (!logs.length || !publicClient) return [];
-
-            const blockNumbers = Array.from(
-                logs.reduce<Set<number>>((set, log) => {
-                    const value = log.blockNumber;
-                    if (value != null) {
-                        set.add(Number(value));
-                    }
-                    return set;
-                }, new Set<number>())
-            );
-
-            const timestampMap = new Map<number, number>();
-            await Promise.allSettled(
-                blockNumbers.map(async (bn) => {
-                    try {
-                        const block = await publicClient.getBlock({ blockNumber: BigInt(bn) });
-                        timestampMap.set(bn, Number(block.timestamp));
-                    } catch {
-                        timestampMap.set(bn, 0);
-                    }
-                })
-            );
-
-            return logs
-                .map((log) => {
-                    const bn = Number(log.blockNumber ?? 0n);
-                    const ts = timestampMap.get(bn) ?? 0;
-                    const amt = toStr(log.args?.amount) ?? '0';
-                    return {
-                        amount: amt,
-                        timestamp: ts,
-                        txHash: log.transactionHash,
-                        blockNumber: bn,
-                    } satisfies HistoryEntry;
-                })
-                .sort((a, b) => {
-                    if (a.timestamp === b.timestamp) {
-                        return (b.blockNumber ?? 0) - (a.blockNumber ?? 0);
-                    }
-                    return b.timestamp - a.timestamp;
-                });
-        },
-        [publicClient]
-    );
-
     const buildHistoryPage = useCallback(
         (entries: HistoryEntry[], page: number, pageSize: number): HistoryPage => {
             const safePageSize = Math.max(1, pageSize);
@@ -1505,6 +1518,44 @@ export function useStakingContract() {
         [],
     );
 
+    const fetchStakeHistoryRecords = useCallback(
+        async (wallet?: `0x${string}`): Promise<StakeHistoryRecord[]> => {
+            const targetAddress = wallet ?? viewingAddress;
+            if (!targetAddress) return [];
+            try {
+                const raw = await readContractSafe<unknown[]>({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'getStakeHistory',
+                    args: [targetAddress],
+                    chainId: supportedChainId,
+                });
+
+                const entries = Array.isArray(raw) ? raw : [];
+                const normalized = entries
+                    .map((entry) => {
+                        if (!entry || typeof entry !== 'object') return null;
+                        const record = entry as { [key: string]: unknown } & { [key: number]: unknown };
+                        const actionValue = Number(extractString(record.action ?? record[0]) ?? '0');
+                        const amount = extractString(record.amount ?? record[1]) ?? '0';
+                        const timestampStr = extractString(record.timestamp ?? record[2]) ?? '0';
+                        const timestamp = Number(timestampStr);
+                        if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+                        const action: StakeHistoryRecord['action'] = actionValue === 1 ? 'UNSTAKE' : 'STAKE';
+                        return { action, amount, timestamp } satisfies StakeHistoryRecord;
+                    })
+                    .filter((value): value is StakeHistoryRecord => Boolean(value))
+                    .sort((a, b) => b.timestamp - a.timestamp);
+
+                return normalized;
+            } catch (error) {
+                console.error('fetchStakeHistoryRecords error', error);
+                return [];
+            }
+        },
+        [supportedChainId, viewingAddress]
+    );
+
     const EVT = useMemo(() => ({
         Staked: parseAbiItem('event Staked(address indexed user, uint256 amount, address indexed referrer, uint256 usdLocked)'),
         Unstaked: parseAbiItem('event Unstaked(address indexed user, uint256 amount, uint256 usdReduced)'),
@@ -1521,106 +1572,6 @@ export function useStakingContract() {
         Transfer: parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)'),
         Approval: parseAbiItem('event Approval(address indexed owner, address indexed spender, uint256 value)'),
     }), []);
-
-    const fetchHistoryFromEvents = useCallback(
-        async (
-            kind: Extract<ActivityKind, 'STAKE' | 'UNSTAKE'>,
-            options?: { page?: number; pageSize?: number; fromBlock?: bigint; toBlock?: bigint; maxBlocksBack?: number }
-        ): Promise<HistoryPage> => {
-            const DEFAULT_PAGE_SIZE = 10;
-            if (!viewingAddress || !publicClient) {
-                return buildHistoryPage([], options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
-            }
-
-            const latest = await publicClient.getBlockNumber();
-            const event = kind === 'STAKE' ? EVT.Staked : EVT.Unstaked;
-            const maxBlocksBack = options?.maxBlocksBack != null ? BigInt(Math.max(0, options.maxBlocksBack)) : DEFAULT_LOG_LOOKBACK;
-            const defaultFromBlock = maxBlocksBack > 0n && latest > maxBlocksBack ? latest - maxBlocksBack : 0n;
-            const fromBlock = options?.fromBlock ?? defaultFromBlock;
-            const toBlock = options?.toBlock ?? latest;
-
-            type LogRange = { from: bigint; to: bigint };
-
-            const ranges: LogRange[] = [{ from: fromBlock, to: toBlock }];
-            const collected: Array<{ args?: Record<string, unknown>; blockNumber?: bigint | number | null; transactionHash?: string }> = [];
-            const visited = new Set<string>();
-            let encounteredPruned = false;
-            let encounteredNetworkError = false;
-
-            while (ranges.length) {
-                const { from, to } = ranges.pop() as LogRange;
-                if (from > to) continue;
-                const key = `${from}-${to}`;
-                if (visited.has(key)) continue;
-                visited.add(key);
-                try {
-                    const slice = await publicClient.getLogs({
-                        address: CONTRACT_ADDRESS,
-                        event,
-                        args: { user: viewingAddress },
-                        fromBlock: from,
-                        toBlock: to,
-                    });
-                    collected.push(...(slice as Array<{ args?: Record<string, unknown>; blockNumber?: bigint | number | null; transactionHash?: string }>));
-                } catch (error) {
-                    if (isNetworkTransportError(error)) {
-                        encounteredNetworkError = true;
-                        console.warn('getLogs network error', {
-                            from: from.toString(),
-                            to: to.toString(),
-                            error,
-                        });
-                        break;
-                    }
-                    if (isPrunedHistoryError(error)) {
-                        encounteredPruned = true;
-                        const span = to > from ? to - from : 0n;
-                        const window = PRUNED_RETRY_WINDOW > 0n ? PRUNED_RETRY_WINDOW : span;
-                        let adjustedFrom = to > window ? to - window : 0n;
-                        if (adjustedFrom <= from) {
-                            const half = span > 1n ? span / 2n : 1n;
-                            adjustedFrom = to > half ? to - half : (from < to ? from + 1n : from);
-                        }
-                        if (adjustedFrom < to) {
-                            ranges.push({ from: adjustedFrom, to });
-                        }
-                        console.warn('getLogs pruned history window', {
-                            from: from.toString(),
-                            to: to.toString(),
-                            adjustedFrom: adjustedFrom.toString(),
-                            error,
-                        });
-                        continue;
-                    }
-                    const span = to - from;
-                    if (span <= MIN_LOG_SPLIT_THRESHOLD) {
-                        console.warn('getLogs range failed', { from: from.toString(), to: to.toString(), error });
-                        continue;
-                    }
-                    const mid = from + span / 2n;
-                    ranges.push({ from, to: mid }, { from: mid + 1n, to });
-                }
-            }
-
-            if (encounteredNetworkError) {
-                console.warn('Aborting history fetch due to persistent network/transport error. Configure a reliable RPC endpoint.');
-                return buildHistoryPage([], options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
-            }
-
-            collected.sort((a, b) => {
-                const aNum = Number((a.blockNumber ?? 0) as number | bigint);
-                const bNum = Number((b.blockNumber ?? 0) as number | bigint);
-                return aNum - bNum;
-            });
-
-            const entries = await mapHistoryEntries(collected);
-            if (encounteredPruned) {
-                console.warn('Some staking history is beyond the current RPC archive window. Configure VITE_BSC_RPC_URL with an archive node to load older events.');
-            }
-            return buildHistoryPage(entries, options?.page ?? 1, options?.pageSize ?? DEFAULT_PAGE_SIZE);
-        },
-        [EVT.Staked, EVT.Unstaked, buildHistoryPage, mapHistoryEntries, publicClient, viewingAddress]
-    );
 
     const fetchUserActivity = useCallback(
         async (options?: {
@@ -1962,22 +1913,40 @@ export function useStakingContract() {
     );
 
     const fetchStakeHistory = useCallback(
-        async (options?: { page?: number; pageSize?: number }) => {
-            return fetchHistoryFromEvents('STAKE', options);
+        async (options?: { page?: number; pageSize?: number; wallet?: `0x${string}` }) => {
+            const DEFAULT_PAGE_SIZE = 10;
+            const records = await fetchStakeHistoryRecords(options?.wallet);
+            const entries = records
+                .filter((record) => record.action === 'STAKE')
+                .map((record) => ({ amount: record.amount, timestamp: record.timestamp } satisfies HistoryEntry));
+            return buildHistoryPage(
+                entries,
+                options?.page ?? 1,
+                options?.pageSize ?? DEFAULT_PAGE_SIZE,
+            );
         },
-        [fetchHistoryFromEvents]
+        [buildHistoryPage, fetchStakeHistoryRecords]
     );
 
     const fetchUnstakeHistory = useCallback(
-        async (options?: { page?: number; pageSize?: number }) => {
-            return fetchHistoryFromEvents('UNSTAKE', options);
+        async (options?: { page?: number; pageSize?: number; wallet?: `0x${string}` }) => {
+            const DEFAULT_PAGE_SIZE = 10;
+            const records = await fetchStakeHistoryRecords(options?.wallet);
+            const entries = records
+                .filter((record) => record.action === 'UNSTAKE')
+                .map((record) => ({ amount: record.amount, timestamp: record.timestamp } satisfies HistoryEntry));
+            return buildHistoryPage(
+                entries,
+                options?.page ?? 1,
+                options?.pageSize ?? DEFAULT_PAGE_SIZE,
+            );
         },
-        [fetchHistoryFromEvents]
+        [buildHistoryPage, fetchStakeHistoryRecords]
     );
 
-    const fetchRoiHistory = useCallback(async (wallet?: `0x${string}`) => {
+    const fetchRoiHistory = useCallback(async (wallet?: `0x${string}`): Promise<RoiHistoryEntry[]> => {
         const targetAddress = wallet ?? viewingAddress;
-        if (!targetAddress) return [] as Array<{ amount: string; timestamp: number }>;
+        if (!targetAddress) return [] as RoiHistoryEntry[];
         try {
             const limitRaw = await readContractSafe<unknown>({
                 address: CONTRACT_ADDRESS,
@@ -2016,19 +1985,19 @@ export function useStakingContract() {
                 .filter((entry): entry is { amount: string; timestamp: number; day: number } => Boolean(entry))
                 .sort((a, b) => b.timestamp - a.timestamp);
 
-            return items;
+            return items.map((entry) => ({ amount: entry.amount, timestamp: entry.timestamp, day: entry.day }));
         } catch (err) {
             console.error('fetchRoiHistory error', err);
-            return [];
+            return [] as RoiHistoryEntry[];
         }
     }, [supportedChainId, viewingAddress]);
 
-    const fetchROIHistoryFull = useCallback(async () => {
+    const fetchROIHistoryFull = useCallback(async (): Promise<RoiHistoryEntry[]> => {
         return fetchRoiHistory();
     }, [fetchRoiHistory]);
 
     const fetchLastNROIEvents = useCallback(
-        async (max: number) => {
+        async (max: number): Promise<RoiHistoryEntry[]> => {
             const history = await fetchRoiHistory();
             if (history.length === 0) return [];
             const limit = Math.max(1, max);
@@ -2068,6 +2037,7 @@ export function useStakingContract() {
         claimRoi,
         fetchBondPlans,
         fetchUserBonds,
+        fetchUserBondSnapshot,
         buyBond,
         withdrawBond,
         blockUser: blockUserAddress,
@@ -2080,7 +2050,6 @@ export function useStakingContract() {
         transferOwnership,
         fetchUserLevelIncome,
         fetchUserActivity,
-        mapHistoryEntries,
         buildHistoryPage,
         fetchDownlinesByLevel,
         fetchDownlineDetailsByLevel,
