@@ -750,6 +750,28 @@ export function useStakingContract() {
         return plans;
     }, [supportedChainId]);
 
+    const getUserBondCount = useCallback(
+        async (wallet: `0x${string}`) => {
+            try {
+                const report = await readContractSafe<unknown[]>({
+                    address: CONTRACT_ADDRESS,
+                    abi: CONTRACT_ABI,
+                    functionName: 'getUserReport',
+                    args: [wallet],
+                    chainId: supportedChainId,
+                });
+                const reportArr = Array.isArray(report) ? report : [];
+                const bondCountRaw = extractString(reportArr[4]) ?? '0';
+                const bondCountNum = Number(bondCountRaw);
+                return Number.isNaN(bondCountNum) ? 0 : bondCountNum;
+            } catch (error) {
+                console.error('getUserBondCount failed', error);
+                return 0;
+            }
+        },
+        [supportedChainId]
+    );
+
     const fetchUserBonds = useCallback(async () => {
         const targetAddress = viewingAddress;
         if (!targetAddress) return [] as Array<{
@@ -766,7 +788,9 @@ export function useStakingContract() {
             status: 'Active' | 'Matured' | 'Withdrawn';
         }>;
 
-        const count = userReport?.bondCount ?? 0;
+        const count = await getUserBondCount(targetAddress);
+        if (count <= 0) return [];
+
         const bonds: Array<{
             index: number;
             planId: number;
@@ -832,29 +856,7 @@ export function useStakingContract() {
         }
 
         return bonds;
-    }, [supportedChainId, userReport?.bondCount, viewingAddress]);
-
-    const getUserBondCount = useCallback(
-        async (wallet: `0x${string}`) => {
-            try {
-                const report = await readContractSafe<unknown[]>({
-                    address: CONTRACT_ADDRESS,
-                    abi: CONTRACT_ABI,
-                    functionName: 'getUserReport',
-                    args: [wallet],
-                    chainId: supportedChainId,
-                });
-                const reportArr = Array.isArray(report) ? report : [];
-                const bondCountRaw = extractString(reportArr[4]) ?? '0';
-                const bondCountNum = Number(bondCountRaw);
-                return Number.isNaN(bondCountNum) ? 0 : bondCountNum;
-            } catch (error) {
-                console.error('getUserBondCount failed', error);
-                return 0;
-            }
-        },
-        [supportedChainId]
-    );
+    }, [getUserBondCount, supportedChainId, viewingAddress]);
 
     const fetchUserBondSnapshot = useCallback(
         async (wallet: `0x${string}`) => {
@@ -1238,7 +1240,7 @@ export function useStakingContract() {
                     args: [normalized],
                     chainId: supportedChainId,
                 });
-                directCount = Number(extractString((info as unknown[])[4]) ?? '0');
+                directCount = Number(extractString((info as unknown[])[7]) ?? '0');
             } catch {
                 directCount = 0;
             }
@@ -1948,44 +1950,62 @@ export function useStakingContract() {
         const targetAddress = wallet ?? viewingAddress;
         if (!targetAddress) return [] as RoiHistoryEntry[];
         try {
-            const limitRaw = await readContractSafe<unknown>({
+            const report = await readContractSafe<unknown[]>({
                 address: CONTRACT_ADDRESS,
                 abi: CONTRACT_ABI,
-                functionName: 'ROI_HISTORY_LIMIT',
+                functionName: 'getUserReport',
+                args: [targetAddress],
                 chainId: supportedChainId,
             });
-            const limit = Number(extractString(limitRaw) ?? '10');
-            const size = Number.isNaN(limit) || limit <= 0 ? 10 : Math.min(limit, 25);
+            const reportArr = Array.isArray(report) ? report : [];
+            const historyCountRaw = extractString(reportArr[5]) ?? '0';
+            const historyCountNum = Number(historyCountRaw);
+            const totalEntries = Number.isNaN(historyCountNum) ? 0 : historyCountNum;
+            if (totalEntries <= 0) return [];
+
+            const MAX_ENTRIES = 25;
+            const entriesToFetch = Math.min(totalEntries, MAX_ENTRIES);
+            const indices = Array.from({ length: entriesToFetch }, (_, idx) => BigInt(totalEntries - 1 - idx));
 
             const reads = await Promise.allSettled(
-                Array.from({ length: size }, (_, idx) =>
+                indices.map((entryIdx) =>
                     readContractSafe<unknown>({
                         address: CONTRACT_ADDRESS,
                         abi: CONTRACT_ABI,
                         functionName: 'roiHistory',
-                        args: [targetAddress, BigInt(idx)],
+                        args: [targetAddress, entryIdx],
                         chainId: supportedChainId,
                     })
                 )
             );
 
-            const DAY_SECONDS = 86_400;
             const items = reads
-                .map((res) => {
+                .map((res, position) => {
                     if (res.status !== 'fulfilled' || !Array.isArray(res.value)) {
                         return null;
                     }
-                    const [dayRaw, amountRaw] = res.value as [unknown, unknown];
+                    const [amountRaw, timestampRaw] = res.value as [unknown, unknown];
                     const amount = extractString(amountRaw) ?? '0';
-                    const dayNumber = Number(extractString(dayRaw) ?? '0');
-                    if (Number.isNaN(dayNumber) || (dayNumber === 0 && amount === '0')) return null;
-                    const timestamp = dayNumber * DAY_SECONDS;
-                    return { amount, timestamp, day: dayNumber };
+                    const timestampStr = extractString(timestampRaw) ?? '0';
+                    const timestampNum = Number(timestampStr);
+                    if ((!timestampNum || Number.isNaN(timestampNum)) && amount === '0') {
+                        return null;
+                    }
+                    const chronologicalIndex = totalEntries - 1 - position;
+                    return {
+                        amount,
+                        timestamp: Number.isNaN(timestampNum) ? 0 : timestampNum,
+                        day: Number.isNaN(timestampNum) ? 0 : Math.floor(timestampNum / 86_400),
+                        chronologicalIndex,
+                    };
                 })
-                .filter((entry): entry is { amount: string; timestamp: number; day: number } => Boolean(entry))
-                .sort((a, b) => b.timestamp - a.timestamp);
+                .filter((entry): entry is { amount: string; timestamp: number; day: number; chronologicalIndex: number } => Boolean(entry))
+                .sort((a, b) => {
+                    if (a.timestamp === b.timestamp) return b.chronologicalIndex - a.chronologicalIndex;
+                    return b.timestamp - a.timestamp;
+                });
 
-            return items.map((entry) => ({ amount: entry.amount, timestamp: entry.timestamp, day: entry.day }));
+            return items.map((entry) => ({ amount: entry.amount, timestamp: entry.timestamp, day: entry.day } satisfies RoiHistoryEntry));
         } catch (err) {
             console.error('fetchRoiHistory error', err);
             return [] as RoiHistoryEntry[];
@@ -2076,4 +2096,4 @@ export function useStakingContract() {
     };
 }
 
-export type { LevelIncomeEvent, DirectDetail };
+export type { LevelIncomeEvent, DirectDetail, RoiHistoryEntry };

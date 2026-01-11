@@ -58,6 +58,14 @@ function normalizeAddress(value: string) {
   return `0x${trimmed.slice(2).toLowerCase()}`;
 }
 
+type ReadFunctionDefinition = {
+  id: string;
+  label: string;
+  description: string;
+  requiresAddress?: boolean;
+  run: (wallet?: `0x${string}`) => Promise<unknown>;
+};
+
 const Admin = () => {
   const { address: connectedAddress } = useAccount();
   const {
@@ -96,6 +104,7 @@ const Admin = () => {
     fetchUsersBatch,
     fetchMemberDetails,
     fetchCompanyPoolStatus,
+    fetchTotalUsers,
     blockUser: blockUserOnChain,
     unblockUser: unblockUserOnChain,
     setDailyRatePercent,
@@ -185,13 +194,99 @@ const Admin = () => {
   );
   const manageBusy = manageAction !== null;
 
-  const readFunctionDefs = useMemo(
+  const readFunctionDefs = useMemo<ReadFunctionDefinition[]>(
     () => [
+      {
+        id: "companyPoolStatus",
+        label: "Company Pool Status",
+        description: "companyValuationPool() & balanceOf(contract) — global",
+        requiresAddress: false,
+        run: async () => {
+          const status = await fetchCompanyPoolStatus();
+          return {
+            poolBalanceRaw: status.poolBalance,
+            poolBalanceFormatted: formatTokenAmount(status.poolBalance),
+            contractBalanceRaw: status.contractTokenBalance,
+            contractBalanceFormatted: formatTokenAmount(
+              status.contractTokenBalance
+            ),
+          };
+        },
+      },
+      {
+        id: "totalStaked",
+        label: "Total Staked (Global)",
+        description: "totalStaked() — global",
+        requiresAddress: false,
+        run: async () => {
+          let raw = "0";
+          try {
+            raw =
+              typeof totalStaked === "bigint"
+                ? totalStaked.toString()
+                : String(totalStaked ?? "0");
+          } catch {
+            raw = String(totalStaked ?? "0");
+          }
+          return {
+            raw,
+            formatted: formatTokenAmount(raw, 18),
+          };
+        },
+      },
+      {
+        id: "dailyRate",
+        label: "Daily Rate",
+        description: "dailyRate() — global",
+        requiresAddress: false,
+        run: async () => ({
+          percentPerDay: `${dailyRatePercent}%`,
+        }),
+      },
+      {
+        id: "tokenPrice",
+        label: "Token Price Sources",
+        description: "tokenPriceUsd() & manualTokenPrice() — global",
+        requiresAddress: false,
+        run: async () => {
+          const parsePrice = (value?: string | null) => {
+            if (!value || value === "0") return null;
+            try {
+              const asUnits = formatUnits(BigInt(value), 18);
+              const numeric = Number.parseFloat(asUnits);
+              if (Number.isNaN(numeric)) return null;
+              return numeric;
+            } catch {
+              return null;
+            }
+          };
+          const dexPrice = parsePrice(tokenPriceUsd);
+          const manualPrice = parsePrice(manualTokenPrice);
+          return {
+            dexPriceRaw: tokenPriceUsd ?? "0",
+            manualOverrideRaw: manualTokenPrice ?? "0",
+            dexPriceUsd: dexPrice,
+            manualOverrideUsd: manualPrice,
+          };
+        },
+      },
+      {
+        id: "totalUsers",
+        label: "Total Registered Users",
+        description: "getTotalUsers() — global",
+        requiresAddress: false,
+        run: async () => {
+          const total = await fetchTotalUsers();
+          return { total };
+        },
+      },
       {
         id: "userSummary",
         label: "User Summary",
         description: "users(address)",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const details = await fetchMemberDetails([wallet]);
           return details[0] ?? null;
         },
@@ -200,7 +295,9 @@ const Admin = () => {
         id: "teamSize",
         label: "Team Size",
         description: "getTeamSize(address)",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const total = await fetchTeamSize(wallet);
           return { wallet, total };
         },
@@ -209,7 +306,9 @@ const Admin = () => {
         id: "levelIncome",
         label: "Level Income",
         description: "levelIncome(address, levelIndex)",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const income = await fetchUserLevelIncome(wallet);
           return income.map((amount, index) => ({ level: index + 1, amount }));
         },
@@ -218,7 +317,9 @@ const Admin = () => {
         id: "bondSnapshot",
         label: "Bond Snapshot",
         description: "userBonds(address, index)",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const snapshot = await fetchUserBondSnapshot(wallet);
           return snapshot;
         },
@@ -227,7 +328,9 @@ const Admin = () => {
         id: "stakeHistory",
         label: "Stake History",
         description: "getStakeHistory(address) filtered by stake",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const page = await fetchStakeHistory({ wallet, pageSize: 50 });
           return page;
         },
@@ -236,7 +339,9 @@ const Admin = () => {
         id: "unstakeHistory",
         label: "Unstake History",
         description: "getStakeHistory(address) filtered by unstake",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const page = await fetchUnstakeHistory({ wallet, pageSize: 50 });
           return page;
         },
@@ -245,20 +350,28 @@ const Admin = () => {
         id: "roiHistory",
         label: "ROI History",
         description: "roiHistory(address, index)",
-        run: async (wallet: `0x${string}`) => {
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
           const history = await fetchUserRoiHistory(wallet);
           return history;
         },
       },
     ],
     [
+      dailyRatePercent,
+      fetchCompanyPoolStatus,
       fetchMemberDetails,
       fetchTeamSize,
-      fetchUserLevelIncome,
+      fetchTotalUsers,
       fetchUserBondSnapshot,
+      fetchUserLevelIncome,
       fetchStakeHistory,
       fetchUnstakeHistory,
       fetchUserRoiHistory,
+      manualTokenPrice,
+      tokenPriceUsd,
+      totalStaked,
     ]
   );
 
@@ -309,20 +422,24 @@ const Admin = () => {
 
   const handleRunReadFunction = useCallback(
     async (functionId: string) => {
-      const normalized = normalizeAddress(readAddressInput);
-      if (!normalized) {
-        toast.error("Enter a valid wallet address");
-        return;
-      }
-
       const definition = readFunctionDefs.find(
         (entry) => entry.id === functionId
       );
       if (!definition) return;
 
+      let wallet: `0x${string}` | undefined;
+      if (definition.requiresAddress !== false) {
+        const normalized = normalizeAddress(readAddressInput);
+        if (!normalized) {
+          toast.error("Enter a valid wallet address");
+          return;
+        }
+        wallet = normalized as `0x${string}`;
+      }
+
       setReadLoadingId(functionId);
       try {
-        const result = await definition.run(normalized as `0x${string}`);
+        const result = await definition.run(wallet);
         const formatted = formatReadResult(result);
         setReadOutputs((prev) => ({ ...prev, [functionId]: formatted }));
         setReadErrors((prev) => ({ ...prev, [functionId]: null }));
@@ -1449,7 +1566,7 @@ const Admin = () => {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <div className="text-xs text-gray-300 uppercase tracking-wide">
-                Target Wallet
+                Target Wallet (optional for global reads)
               </div>
               <Input
                 placeholder="Wallet address (0x…)"
@@ -1458,8 +1575,8 @@ const Admin = () => {
                 className="input-bg border-gray-700 text-white"
               />
               <p className="text-xs text-gray-500">
-                Enter any wallet to inspect on-chain read-only outputs provided
-                by the staking contract.
+                Enter a wallet to inspect address-specific reads. Functions
+                without wallet requirements can be run immediately.
               </p>
             </div>
 
@@ -1468,6 +1585,9 @@ const Admin = () => {
                 const isRunning = readLoadingId === def.id;
                 const errorMessage = readErrors[def.id] ?? null;
                 const output = readOutputs[def.id] ?? "";
+                const requiresAddress = def.requiresAddress !== false;
+                const shouldDisable =
+                  (requiresAddress && !readAddressIsValid) || isRunning;
                 return (
                   <div
                     key={def.id}
@@ -1486,7 +1606,7 @@ const Admin = () => {
                         variant="outline"
                         className="border-yellow-500/40 text-yellow-400"
                         onClick={() => handleRunReadFunction(def.id)}
-                        disabled={!readAddressIsValid || isRunning}
+                        disabled={shouldDisable}
                       >
                         {isRunning ? "Running…" : "Run"}
                       </Button>

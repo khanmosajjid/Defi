@@ -606,20 +606,13 @@ export default function Dashboard() {
   ]);
 
   // bonds state & helpers
-  const [bonds, setBonds] = useState<
-    Array<{
-      index: number;
-      planId: number;
-      amount: string;
-      amountHuman: string;
-      startAt: number;
-      endAt: number;
-      withdrawn: boolean;
-      duration: string;
-      rewardPercent: number;
-      status: "Active" | "Matured" | "Withdrawn";
-    }>
-  >([]);
+  type UserBond = Awaited<ReturnType<typeof fetchUserBonds>> extends Array<
+    infer Item
+  >
+    ? Item
+    : never;
+
+  const [bonds, setBonds] = useState<UserBond[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -636,15 +629,21 @@ export default function Dashboard() {
     };
   }, [fetchUserBonds]);
 
-  const totalBondAmountHuman = (() => {
+  const totalBondAmountHuman = useMemo(() => {
     try {
-      let sum = 0n;
-      for (const b of bonds) sum += BigInt(b.amount || "0");
-      return (Number(sum / 10n ** 15n) / 1000).toLocaleString();
+      const total = bonds.reduce<bigint>((acc, bond) => {
+        try {
+          const value = bond?.total ?? bond?.principal ?? "0";
+          return acc + BigInt(value);
+        } catch {
+          return acc;
+        }
+      }, 0n);
+      return formatWeiToETN(total.toString());
     } catch {
       return "0";
     }
-  })();
+  }, [bonds, formatWeiToETN]);
 
   const formatUsd18 = (v?: string) => {
     try {
@@ -686,6 +685,70 @@ export default function Dashboard() {
       mounted = false;
     };
   }, [fetchUserLevelIncome]);
+
+  const pendingRoiHuman = useMemo(
+    () => formatWeiToETN(userReport?.pendingRoi),
+    [formatWeiToETN, userReport?.pendingRoi]
+  );
+  const totalRoiEarnedHuman = useMemo(
+    () => formatWeiToETN(userReport?.totalRoiEarned),
+    [formatWeiToETN, userReport?.totalRoiEarned]
+  );
+  const totalLevelRewardsHuman = useMemo(
+    () => formatWeiToETN(userReport?.totalLevelRewardEarned),
+    [formatWeiToETN, userReport?.totalLevelRewardEarned]
+  );
+  const totalReferralIncomeHuman = useMemo(
+    () => formatWeiToETN(userReport?.totalReferralIncome),
+    [formatWeiToETN, userReport?.totalReferralIncome]
+  );
+  const totalWithdrawnHuman = useMemo(
+    () => formatWeiToETN(userReport?.totalWithdrawn),
+    [formatWeiToETN, userReport?.totalWithdrawn]
+  );
+  const levelIncomeTotalHuman = useMemo(() => {
+    try {
+      const total = levelIncome.reduce<bigint>((acc, value) => {
+        try {
+          return acc + BigInt(value ?? "0");
+        } catch {
+          return acc;
+        }
+      }, 0n);
+      return formatWeiToETN(total.toString());
+    } catch {
+      return "0";
+    }
+  }, [formatWeiToETN, levelIncome]);
+
+  const incomeSummaryRows = useMemo(
+    () =>
+      [
+        { label: "Pending ROI", value: `${pendingRoiHuman} ETN` },
+        { label: "Total ROI earned", value: `${totalRoiEarnedHuman} ETN` },
+        {
+          label: "Level rewards earned",
+          value: `${totalLevelRewardsHuman} ETN`,
+        },
+        {
+          label: "Team level income",
+          value: `${levelIncomeTotalHuman} ETN`,
+        },
+        {
+          label: "Referral income",
+          value: `${totalReferralIncomeHuman} ETN`,
+        },
+        { label: "Total withdrawn", value: `${totalWithdrawnHuman} ETN` },
+      ].filter((row) => !row.value.includes("NaN")),
+    [
+      levelIncomeTotalHuman,
+      pendingRoiHuman,
+      totalLevelRewardsHuman,
+      totalReferralIncomeHuman,
+      totalRoiEarnedHuman,
+      totalWithdrawnHuman,
+    ]
+  );
 
   const levelIncomeDisplay = useMemo(() => {
     const unlocked = userLevel && userLevel > 0 ? userLevel : 0;
@@ -1058,6 +1121,36 @@ export default function Dashboard() {
             colorIndex={7}
             aosDelay={400}
           />
+          <StatCard
+            title="Total ROI Earned"
+            value={`${totalRoiEarnedHuman} ETN`}
+            change="Since day one"
+            changeType="positive"
+            icon={<TrendingUp className="w-5 h-5" />}
+            description="Compounded staking rewards"
+            colorIndex={0}
+            aosDelay={450}
+          />
+          <StatCard
+            title="Level Rewards Earned"
+            value={`${totalLevelRewardsHuman} ETN`}
+            change="From team levels"
+            changeType="positive"
+            icon={<Gift className="w-5 h-5" />}
+            description="Company pool distributions"
+            colorIndex={1}
+            aosDelay={500}
+          />
+          <StatCard
+            title="Referral Income"
+            value={`${totalReferralIncomeHuman} ETN`}
+            change="Lifetime referrals"
+            changeType="positive"
+            icon={<Users className="w-5 h-5" />}
+            description="Direct & indirect referrals"
+            colorIndex={2}
+            aosDelay={550}
+          />
         </div>
 
         {/* Main Content */}
@@ -1294,6 +1387,32 @@ export default function Dashboard() {
                           <p className="text-gray-500">No directs yet</p>
                         )}
                       </div>
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-400 mb-2">
+                          Income breakdown
+                        </p>
+                        {incomeSummaryRows.length === 0 ? (
+                          <p className="text-xs text-gray-500">
+                            No income recorded yet
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {incomeSummaryRows.map((row) => (
+                              <div
+                                key={row.label}
+                                className="flex items-center justify-between bg-gray-900/60 px-3 py-2 rounded"
+                              >
+                                <span className="text-xs text-gray-400">
+                                  {row.label}
+                                </span>
+                                <span className="text-sm text-yellow-400 font-medium">
+                                  {row.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       {/* Income by Level */}
                       <div className="mt-3">
                         <p className="text-sm text-gray-400 mb-1">
@@ -1401,6 +1520,102 @@ export default function Dashboard() {
                           </div>
                         )}
                       </div>
+                      {/* Daily Level Income */}
+                      {teamIncomeRows.length > 0 && (
+                        <div className="mt-3 space-y-3">
+                          <p className="text-sm text-gray-400">
+                            Members by level
+                          </p>
+                          {teamIncomeRows.map((row) => {
+                            const members = teamDetailsByLevel[row.level] ?? [];
+                            const memberCount = members.length;
+                            return (
+                              <div
+                                key={`team-level-members-${row.level}`}
+                                className="border border-yellow-500/10 rounded bg-gray-900/50"
+                              >
+                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-900/60">
+                                  <span className="text-sm text-gray-200">
+                                    Level {row.level}
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    {memberCount.toLocaleString()} member
+                                    {memberCount === 1 ? "" : "s"}
+                                  </span>
+                                </div>
+                                {memberCount === 0 ? (
+                                  <p className="px-3 py-3 text-xs text-gray-500">
+                                    No members loaded for this level yet.
+                                  </p>
+                                ) : (
+                                  <ul className="max-h-48 overflow-y-auto divide-y divide-gray-900/40">
+                                    {members.map((member) => (
+                                      <li
+                                        key={`${row.level}-${member.address}`}
+                                        className="flex items-start justify-between gap-3 px-3 py-2"
+                                      >
+                                        <div className="flex-1">
+                                          <p className="text-sm text-gray-200">
+                                            {shortAddress(member.address)}
+                                          </p>
+                                          <div className="mt-1 grid grid-cols-2 gap-2 text-[11px] text-gray-400 sm:grid-cols-3">
+                                            <span>
+                                              Stake:
+                                              <span className="ml-1 text-yellow-400">
+                                                {formatWeiToETN(
+                                                  member.selfStaked
+                                                )}{" "}
+                                                ETN
+                                              </span>
+                                            </span>
+                                            <span>
+                                              Pending:
+                                              <span className="ml-1 text-green-400">
+                                                {formatWeiToETN(
+                                                  member.pendingRoi
+                                                )}{" "}
+                                                ETN
+                                              </span>
+                                            </span>
+                                            <span>
+                                              Referral:
+                                              <span className="ml-1 text-blue-400">
+                                                {formatWeiToETN(
+                                                  member.totalReferralIncome
+                                                )}{" "}
+                                                ETN
+                                              </span>
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                          <span className="text-xs text-gray-500">
+                                            L{member.level || 0}
+                                          </span>
+                                          <button
+                                            onClick={async () => {
+                                              try {
+                                                await navigator.clipboard.writeText(
+                                                  member.address
+                                                );
+                                              } catch {
+                                                /* ignore */
+                                              }
+                                            }}
+                                            className="text-xs text-yellow-400 hover:underline"
+                                          >
+                                            Copy
+                                          </button>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {/* Daily Level Income */}
                       <div className="mt-3">
                         <div className="flex items-center justify-between mb-1 gap-2">
@@ -1811,7 +2026,10 @@ export default function Dashboard() {
                               </div>
                               <div className="text-right">
                                 <p className="font-medium">
-                                  {b.amountHuman} ETN
+                                  {formatWeiToETN(b.total)} ETN
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  Principal {formatWeiToETN(b.principal)} ETN
                                 </p>
                                 <p className="text-sm text-yellow-400">
                                   Reward {b.rewardPercent}%

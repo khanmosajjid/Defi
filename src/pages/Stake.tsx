@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useStakingContract } from "@/service/stakingService";
@@ -1086,20 +1086,21 @@ function LevelIncomeList({
 }) {
   const [loading, setLoading] = useState(false);
   const [levelIncome, setLevelIncome] = useState<string[]>([]);
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const arr = await fetchUserLevelIncome();
-      setLevelIncome(arr);
+      setLevelIncome(Array.isArray(arr) ? arr : []);
+    } catch (error) {
+      console.error("fetchUserLevelIncome failed", error);
+      setLevelIncome([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchUserLevelIncome]);
   useEffect(() => {
-    // auto-load once
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void load();
+  }, [load]);
   return (
     <div>
       <div className="flex items-center justify-between mb-2">

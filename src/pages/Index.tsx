@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import StatCard from "@/components/common/StatCard";
-import featureShape from "../../public/assets/features_shape.png";
 import chooseIcon1 from "../assets/img/shape/choose-icon01.svg";
 import chooseIcon2 from "../assets/img/shape/choose-icon02.svg";
 import chooseIcon3 from "../assets/img/shape/choose-icon03.svg";
@@ -24,6 +23,8 @@ import {
 } from "lucide-react";
 import { STATS } from "@/lib/constants";
 import { formatUnits } from "viem";
+
+const featureShape = "/assets/features_shape.png";
 
 export default function Index() {
   const [currentStat, setCurrentStat] = useState(0);
