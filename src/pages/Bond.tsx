@@ -27,6 +27,20 @@ const trimTrailingZeros = (value: string) => {
   return trimmed.length > 0 ? trimmed : "0";
 };
 
+const formatDurationShort = (seconds: number) => {
+  const total = Math.max(seconds, 0);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 && parts.length < 2) parts.push(`${minutes}m`);
+  if (parts.length === 0) parts.push(`${secs}s`);
+  return parts.slice(0, 2).join(" ");
+};
+
 export default function Bond() {
   const {
     fetchBondPlans,
@@ -70,6 +84,7 @@ export default function Bond() {
     status: "Active" | "Matured" | "Withdrawn";
   };
   const [userBonds, setUserBonds] = useState<UserBond[]>([]);
+  const [nowTs, setNowTs] = useState(() => Math.floor(Date.now() / 1000));
 
   const tokens = {
     USDT: "0x55d398326f99059fF775485246999027B3197955", // BSC mainnet USDT
@@ -129,6 +144,14 @@ export default function Bond() {
   useEffect(() => {
     reloadUserBonds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const interval = window.setInterval(() => {
+      setNowTs(Math.floor(Date.now() / 1000));
+    }, 60000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -670,68 +693,93 @@ export default function Bond() {
                     No bonds found
                   </div>
                 )}
-                {userBonds.map((bond) => (
-                  <div key={bond.index} className="p-4 input-bg rounded-lg">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-medium text-white">
-                          Plan #{bond.planId}
-                        </h4>
-                        <p className="text-sm text-gray-400">
-                          Total: {bond.totalHuman} ETN
-                        </p>
+                {userBonds.map((bond) => {
+                  const secondsRemaining = bond.endAt - nowTs;
+                  let availabilityLabel = "";
+                  let availabilityClass = "text-gray-200";
+
+                  if (bond.withdrawn) {
+                    availabilityLabel = "Withdrawn";
+                    availabilityClass = "text-gray-500";
+                  } else if (secondsRemaining <= 0) {
+                    availabilityLabel = "Ready to withdraw";
+                    availabilityClass = "text-green-400";
+                  } else {
+                    availabilityLabel = `Matures in ${formatDurationShort(
+                      secondsRemaining
+                    )}`;
+                    availabilityClass = "text-yellow-400";
+                  }
+
+                  return (
+                    <div key={bond.index} className="p-4 input-bg rounded-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-medium text-white">
+                            Plan #{bond.planId}
+                          </h4>
+                          <p className="text-sm text-gray-400">
+                            Total: {bond.totalHuman} ETN
+                          </p>
+                        </div>
+                        {bond.status === "Matured" && (
+                          <CheckCircle className="w-5 h-5 text-green-400" />
+                        )}
                       </div>
-                      {bond.status === "Matured" && (
-                        <CheckCircle className="w-5 h-5 text-green-400" />
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Principal:</span>
+                          <span className="text-white">
+                            {formatTokenAmount(bond.principal)} ETN
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Reward:</span>
+                          <span className="text-green-400">
+                            {formatTokenAmount(bond.reward)} ETN
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Status:</span>
+                          <span className="text-white">{bond.status}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Availability:</span>
+                          <span className={availabilityClass}>
+                            {availabilityLabel}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Ends at:</span>
+                          <span className="text-yellow-400">
+                            {new Date(bond.endAt * 1000).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {bond.status === "Matured" && !bond.withdrawn ? (
+                        <Button
+                          className="w-full mt-3 bg-green-600 hover:bg-green-700"
+                          onClick={async () => {
+                            await withdrawBond(bond.index);
+                            await reloadUserBonds();
+                          }}
+                        >
+                          Withdraw Bond
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="w-full mt-3"
+                          disabled
+                        >
+                          {bond.status}
+                        </Button>
                       )}
                     </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Principal:</span>
-                        <span className="text-white">
-                          {formatTokenAmount(bond.principal)} ETN
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Reward:</span>
-                        <span className="text-green-400">
-                          {formatTokenAmount(bond.reward)} ETN
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Status:</span>
-                        <span className="text-white">{bond.status}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Ends at:</span>
-                        <span className="text-yellow-400">
-                          {new Date(bond.endAt * 1000).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {bond.status === "Matured" && !bond.withdrawn ? (
-                      <Button
-                        className="w-full mt-3 bg-green-600 hover:bg-green-700"
-                        onClick={async () => {
-                          await withdrawBond(bond.index);
-                          await reloadUserBonds();
-                        }}
-                      >
-                        Withdraw Bond
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        className="w-full mt-3"
-                        disabled
-                      >
-                        {bond.status}
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
 

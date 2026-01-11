@@ -37,7 +37,12 @@ type MemberDetail = {
   referralIncome?: string;
   totalReferralIncome?: string;
   rank?: number;
+  directs?: number;
+  totalLevelRewardEarned?: string;
+  totalRoiEarned?: string;
 };
+
+type TeamLevelSelection = number | "ALL";
 function HistoryPanel() {
   const { fetchStakeHistory, fetchUnstakeHistory } = useStakingContract();
   const PAGE_SIZE = 5;
@@ -490,6 +495,24 @@ export default function Dashboard() {
     }
   }, []);
 
+  const formatDurationShort = useCallback((seconds: number) => {
+    const total = Math.max(seconds, 0);
+    if (total === 0) return "Ready to withdraw";
+    const days = Math.floor(total / 86400);
+    if (days > 0) {
+      return `${days} day${days === 1 ? "" : "s"} remaining`;
+    }
+    const hours = Math.floor((total % 86400) / 3600);
+    if (hours > 0) {
+      return `${hours} hour${hours === 1 ? "" : "s"} remaining`;
+    }
+    const minutes = Math.floor((total % 3600) / 60);
+    if (minutes > 0) {
+      return `${minutes} minute${minutes === 1 ? "" : "s"} remaining`;
+    }
+    return `${total} second${total === 1 ? "" : "s"} remaining`;
+  }, []);
+
   const userStats = {
     totalBalance: `${formatWeiToETN(tokenBalance)} ETN`,
     stakedAmount: `${formatWeiToETN(userInfo?.selfStaked)} ETN`,
@@ -800,22 +823,24 @@ export default function Dashboard() {
   const [teamDetailsByLevel, setTeamDetailsByLevel] = useState<
     Record<number, MemberDetail[]>
   >({});
-  const [selectedTeamLevel, setSelectedTeamLevel] = useState<number | null>(
-    null
-  );
+  const [selectedTeamLevel, setSelectedTeamLevel] =
+    useState<TeamLevelSelection | null>(null);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const loadTeam = useCallback(async () => {
     try {
       setLoadingTeam(true);
-      const detailed = await fetchDownlineDetailsByLevel();
+      const detailed = await fetchDownlineDetailsByLevel(15);
       setTeamDetailsByLevel(detailed);
-      const availableLevels = Object.keys(detailed)
-        .map((lvl) => Number(lvl))
-        .filter((lvl) => (detailed[lvl]?.length ?? 0) > 0)
-        .sort((a, b) => a - b);
       setSelectedTeamLevel((prev) => {
-        if (prev && detailed[prev]?.length) return prev;
-        return availableLevels.length ? availableLevels[0] : null;
+        const hasMembers = Object.values(detailed).some(
+          (members) => (members?.length ?? 0) > 0
+        );
+        if (!hasMembers) return null;
+        if (prev === "ALL") return prev;
+        if (typeof prev === "number" && (detailed[prev]?.length ?? 0) > 0) {
+          return prev;
+        }
+        return "ALL";
       });
     } catch (e) {
       console.error("loadTeam failed", e);
@@ -897,6 +922,27 @@ export default function Dashboard() {
         : fallback;
     return numericTeamSize.toLocaleString();
   }, [derivedTeamMemberTotal, teamSize]);
+
+  const allTeamMembers = useMemo(
+    () =>
+      Object.entries(teamDetailsByLevel)
+        .flatMap(([levelKey, members]) => {
+          const levelNum = Number(levelKey);
+          if (!Number.isFinite(levelNum) || levelNum <= 0) return [];
+          return (members ?? []).map((member) => ({
+            level: levelNum,
+            detail: member,
+          }));
+        })
+        .sort((a, b) => a.level - b.level),
+    [teamDetailsByLevel]
+  );
+
+  const allTeamMembersCount = allTeamMembers.length;
+  const allTeamMembersCountDisplay = useMemo(
+    () => allTeamMembersCount.toLocaleString(),
+    [allTeamMembersCount]
+  );
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -1461,22 +1507,35 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2">
                             <Select
                               value={
-                                selectedTeamLevel
+                                selectedTeamLevel !== null
                                   ? String(selectedTeamLevel)
                                   : undefined
                               }
-                              onValueChange={(value) =>
-                                setSelectedTeamLevel(Number(value))
-                              }
+                              onValueChange={(value) => {
+                                if (value === "ALL") {
+                                  setSelectedTeamLevel("ALL");
+                                  return;
+                                }
+                                const parsed = Number(value);
+                                setSelectedTeamLevel(
+                                  Number.isFinite(parsed) ? parsed : null
+                                );
+                              }}
                               disabled={
                                 loadingTeam ||
-                                !Object.keys(teamDetailsByLevel).length
+                                (allTeamMembersCount === 0 &&
+                                  !Object.keys(teamDetailsByLevel).length)
                               }
                             >
                               <SelectTrigger className="w-32 bg-gray-900/60 border-gray-700 text-gray-200">
-                                <SelectValue placeholder="Select level" />
+                                <SelectValue placeholder="Select view" />
                               </SelectTrigger>
                               <SelectContent className="bg-gray-900 text-gray-200">
+                                {allTeamMembersCount > 0 && (
+                                  <SelectItem value="ALL">
+                                    All members ({allTeamMembersCountDisplay})
+                                  </SelectItem>
+                                )}
                                 {Object.keys(teamDetailsByLevel)
                                   .map((lvl) => Number(lvl))
                                   .sort((a, b) => a - b)
@@ -1503,11 +1562,97 @@ export default function Dashboard() {
                             </Button>
                           </div>
                         </div>
-                        {Object.keys(teamDetailsByLevel).length === 0 ? (
+                        {Object.keys(teamDetailsByLevel).length === 0 &&
+                        allTeamMembersCount === 0 ? (
                           <p className="text-gray-500">
-                            Load to see your team across unlocked levels
+                            Load to see your full team
                           </p>
-                        ) : selectedTeamLevel ? (
+                        ) : selectedTeamLevel === "ALL" ? (
+                          <>
+                            <p className="text-xs text-gray-500">
+                              Showing {allTeamMembersCountDisplay} team member
+                              {allTeamMembersCount === 1 ? "" : "s"}.
+                            </p>
+                            {allTeamMembersCount > 0 ? (
+                              <ul className="space-y-2 mt-2 max-h-72 overflow-y-auto pr-1">
+                                {allTeamMembers.map(({ level, detail }) => (
+                                  <li
+                                    key={`${detail.address}-${level}`}
+                                    className="flex items-start justify-between bg-gray-900/60 px-3 py-2 rounded"
+                                  >
+                                    <div className="flex-1">
+                                      <p className="text-gray-200">
+                                        L{level}
+                                        {level === 1 ? " • Direct" : ""} •{" "}
+                                        {detail.address.slice(0, 6)}...
+                                        {detail.address.slice(-4)}
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-gray-400 sm:grid-cols-3">
+                                        <span>
+                                          Stake:
+                                          <span className="ml-1 text-yellow-400">
+                                            {formatWeiToETN(detail.selfStaked)}{" "}
+                                            ETN
+                                          </span>
+                                        </span>
+                                        <span>
+                                          Pending:
+                                          <span className="ml-1 text-green-400">
+                                            {formatWeiToETN(detail.pendingRoi)}{" "}
+                                            ETN
+                                          </span>
+                                        </span>
+                                        <span>
+                                          Total Referral:
+                                          <span className="ml-1 text-blue-400">
+                                            {formatWeiToETN(
+                                              detail.totalReferralIncome
+                                            )}{" "}
+                                            ETN
+                                          </span>
+                                        </span>
+                                        <span>
+                                          Directs:
+                                          <span className="ml-1 text-yellow-300">
+                                            {detail.directs ?? 0}
+                                          </span>
+                                        </span>
+                                        <span>
+                                          Rank:
+                                          <span className="ml-1 text-yellow-300">
+                                            {detail.rank
+                                              ? `R${detail.rank}`
+                                              : "—"}
+                                          </span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1">
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            await navigator.clipboard.writeText(
+                                              detail.address
+                                            );
+                                          } catch (e) {
+                                            /* ignore */
+                                          }
+                                        }}
+                                        className="text-xs text-yellow-400 hover:underline"
+                                      >
+                                        Copy
+                                      </button>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-gray-500 mt-2">
+                                No team members found yet
+                              </p>
+                            )}
+                          </>
+                        ) : typeof selectedTeamLevel === "number" ? (
                           <>
                             <p className="text-xs text-gray-500">
                               Level {selectedTeamLevel} income:
@@ -1603,7 +1748,7 @@ export default function Dashboard() {
                           </>
                         ) : (
                           <p className="text-gray-500">
-                            Select a level to view members
+                            Select a level or choose All to view members
                           </p>
                         )}
                       </div>
@@ -1643,7 +1788,14 @@ export default function Dashboard() {
                             0,
                             b.endAt - Math.floor(Date.now() / 1000)
                           );
-                          const days = Math.floor(remaining / 86400);
+                          const availabilityLabel = b.withdrawn
+                            ? "Withdrawn"
+                            : formatDurationShort(remaining);
+                          const availabilityClass = b.withdrawn
+                            ? "text-gray-500"
+                            : remaining === 0
+                            ? "text-green-400"
+                            : "text-gray-400";
                           return (
                             <div
                               key={b.index}
@@ -1653,14 +1805,8 @@ export default function Dashboard() {
                                 <p className="font-medium">
                                   Plan #{b.planId} • {b.status}
                                 </p>
-                                <p className="text-sm text-gray-400">
-                                  {days > 0
-                                    ? `${days} day${
-                                        days === 1 ? "" : "s"
-                                      } remaining`
-                                    : b.status === "Active"
-                                    ? "Matures today"
-                                    : b.status}
+                                <p className={`text-sm ${availabilityClass}`}>
+                                  {availabilityLabel}
                                 </p>
                               </div>
                               <div className="text-right">

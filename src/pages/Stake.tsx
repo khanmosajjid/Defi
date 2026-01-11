@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useStakingContract } from "@/service/stakingService";
 import { useAccount, useChainId } from "wagmi";
@@ -7,10 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatCard from "@/components/common/StatCard";
-import { Coins, TrendingUp, Clock, Zap, ArrowRight } from "lucide-react";
+import {
+  Coins,
+  TrendingUp,
+  Clock,
+  Zap,
+  ArrowRight,
+  AlertTriangle,
+} from "lucide-react";
 import { STATS, CONTRACT_ADDRESSES, DEFAULT_REFERRER } from "@/lib/constants";
 import { useTokenSwap } from "@/hooks/useTokenSwap";
 import { formatUnits, parseUnits } from "viem";
+import { readStoredWalletAddress } from "@/lib/utils";
 
 const BURN_FACTOR_NUM = 99n;
 const BURN_FACTOR_DEN = 100n;
@@ -43,8 +52,11 @@ export default function Stake() {
     useState<string>(DEFAULT_REFERRER);
   const [unstakeAmount, setUnstakeAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
   const [quotedETHAN, setQuotedETHAN] = useState("0");
+  const [storedWallet, setStoredWallet] = useState<string | null>(null);
+  const [walletCheckStatus, setWalletCheckStatus] = useState<
+    "idle" | "checking" | "error"
+  >("checking");
 
   const {
     stake: stakeTx,
@@ -58,7 +70,6 @@ export default function Stake() {
     userLevel,
     userRewardPercent,
     unstake: unstakeTx,
-    claimRoi,
     fetchROIHistoryFull,
     fetchLastNROIEvents,
     fetchUserLevelIncome,
@@ -91,6 +102,29 @@ export default function Stake() {
     USDT: "0x55d398326f99059fF775485246999027B3197955", //mainnet
     ETHAN: CONTRACT_ADDRESSES.token,
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setWalletCheckStatus("checking");
+
+    readStoredWalletAddress()
+      .then((value) => {
+        if (cancelled) return;
+        setStoredWallet(value);
+        setWalletCheckStatus("idle");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("Unable to verify stored wallet", err);
+        setStoredWallet(null);
+        setWalletCheckStatus("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const formatWeiToEtn = (value?: string) => {
     try {
@@ -165,13 +199,6 @@ export default function Stake() {
       ? pendingRewardsRaw
       : pendingComputed || "0";
   const pendingRewardsHuman = formatWeiToEtn(pendingRewards);
-  const hasClaimableRewards = (() => {
-    try {
-      return BigInt(pendingRewards) > 0n;
-    } catch {
-      return false;
-    }
-  })();
   const directs = userInfo?.directs ?? 0;
   const totalIncome = (() => {
     try {
@@ -207,6 +234,8 @@ export default function Stake() {
   })();
   const networkLabel = chainId ?? "network";
   const referralLocked = Boolean(refFromUrl && !hasRegisteredReferrer);
+  const shouldPromptWalletRegistration =
+    walletCheckStatus !== "checking" && !storedWallet;
 
   // parse referral from URL on first load
   useEffect(() => {
@@ -261,20 +290,6 @@ export default function Stake() {
     const numAmount = parseFloat(amount) || 0;
     const dailyReward = numAmount * 0.012;
     return dailyReward.toFixed(2);
-  };
-
-  const handleClaimRoi = async () => {
-    if (isClaiming) return;
-    try {
-      setIsClaiming(true);
-      await claimRoi();
-      await refetchPendingRewards();
-      await refetchUserInfo();
-    } catch (err) {
-      console.error("Claim ROI failed", err);
-    } finally {
-      setIsClaiming(false);
-    }
   };
 
   const handleSwapAndStake = async () => {
@@ -438,6 +453,36 @@ export default function Stake() {
             Stake ETN tokens and earn compound interest rewards every 8 hours
           </p> */}
         </div>
+
+        {shouldPromptWalletRegistration && (
+          <div className="mb-8 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-yellow-300" />
+                <div>
+                  <p className="font-semibold text-yellow-300">
+                    Register your wallet
+                  </p>
+                  <p className="text-sm text-gray-300">
+                    We could not find a stored wallet address. Register before
+                    staking so your access persists across sessions.
+                  </p>
+                </div>
+              </div>
+              <Link to="/register" className="sm:ml-auto w-full sm:w-auto">
+                <Button className="w-full custom-btns btn-bg-yellow text-black font-semibold">
+                  Register Wallet
+                </Button>
+              </Link>
+            </div>
+            {walletCheckStatus === "error" && (
+              <p className="mt-3 text-xs text-red-400">
+                Browser storage could not be read. Please register again to
+                refresh your wallet information.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -888,13 +933,6 @@ export default function Stake() {
                   unstake to realize profits.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <Button
-                    className="flex-1 card-btn card-btn-bg text-black font-semibold"
-                    disabled={!hasClaimableRewards || isClaiming}
-                    onClick={handleClaimRoi}
-                  >
-                    {isClaiming ? "Claiming..." : "Claim ROI"}
-                  </Button>
                   <Button
                     variant="outline"
                     className="flex-1 card-btn card-btn-sec-bg"

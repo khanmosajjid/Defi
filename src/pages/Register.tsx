@@ -5,13 +5,16 @@ import { useAccount } from "wagmi";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { WALLET_STORAGE } from "@/lib/constants";
+import { readStoredWalletAddress } from "@/lib/utils";
 
-const WALLET_LOCAL_KEY = "ethan:registeredWallet";
-const WALLET_SESSION_KEY = "ethan:registeredWalletSession";
-const WALLET_CACHE_NAME = "ethan-wallet-cache";
-const WALLET_CACHE_URL = "/ethan-wallet-address";
+const {
+  localKey: WALLET_LOCAL_KEY,
+  sessionKey: WALLET_SESSION_KEY,
+  cacheName: WALLET_CACHE_NAME,
+  cacheUrl: WALLET_CACHE_URL,
+} = WALLET_STORAGE;
 
 const shortenAddress = (addr?: string | null) => {
   if (!addr) return null;
@@ -29,34 +32,30 @@ export default function Register() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    try {
-      const local = window.localStorage.getItem(WALLET_LOCAL_KEY);
-      const session = window.sessionStorage.getItem(WALLET_SESSION_KEY);
-      const initial = local || session || null;
-      if (initial) setStoredAddress(initial);
-    } catch (err) {
-      console.warn("Unable to read stored wallet from storage", err);
-    }
+    let cancelled = false;
+    const supportsCache = "caches" in window;
 
-    if (typeof window !== "undefined" && "caches" in window) {
-      setCacheStatus("saving");
-      caches
-        .open(WALLET_CACHE_NAME)
-        .then((cache) => cache.match(WALLET_CACHE_URL))
-        .then((match) => (match ? match.json() : null))
-        .then((json) => {
-          if (json && typeof json.address === "string") {
-            setStoredAddress((prev) => prev ?? json.address);
-            setCacheStatus("saved");
-          } else {
-            setCacheStatus("idle");
-          }
-        })
-        .catch((err) => {
-          console.warn("Unable to restore wallet cache", err);
-          setCacheStatus("error");
-        });
-    }
+    setCacheStatus(supportsCache ? "saving" : "idle");
+
+    readStoredWalletAddress()
+      .then((initial) => {
+        if (cancelled) return;
+        if (initial) {
+          setStoredAddress(initial);
+          setCacheStatus(supportsCache ? "saved" : "idle");
+        } else if (supportsCache) {
+          setCacheStatus("idle");
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("Unable to restore stored wallet", err);
+        setCacheStatus(supportsCache ? "error" : "idle");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -118,38 +117,43 @@ export default function Register() {
     <div className="min-h-screen bg-black text-white">
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 card-box m-auto from-yellow-500/5 via-transparent to-yellow-500/10 blur-3xl" />
-        <div className="relative container mx-auto px-4 py-16 lg:py-24" data-aos="zoom-in">
+        <div
+          className="relative container mx-auto px-4 py-16 lg:py-24"
+          data-aos="zoom-in"
+        >
           <div className="card-width">
             <Card className="register-box from-gray-900 to-gray-800 border border-yellow-500/20 shadow-xl">
               <CardHeader>
                 <CardTitle className=" text-yellow-400">
-                   <h2 className="text-2xl text-center sm:text-5xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-                Register your wallet <br /> in a single tap
-              </h2>
+                  <h2 className="text-2xl text-center sm:text-5xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                    Register your wallet <br /> in a single tap
+                  </h2>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <p className="text-sm text-center text-gray-400">
                   Connect your preferred wallet to secure your spot in the ETHAN
-                ecosystem. We safely remember your address so you can pick up
-                exactly where you left off.
+                  ecosystem. We safely remember your address so you can pick up
+                  exactly where you left off.
                 </p>
 
                 <div className="bg-yellow-transparet border border-yellow-500/20 rounded-2xl p-6 text-center space-y-4">
-                 <div className="card-content mb-8">
-                   <h3 className="font-500 sm:text-5xl mb-4 lg:text-3xl bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">Connect Wallet</h3>
-                   <p className="text-sm text-center text-gray-400">
-                  Use the button below to connect your wallet. Once connected,
-                  we will store the address securely in your browser so that it
-                  persists between visits.
-                </p>
-                 </div>
+                  <div className="card-content mb-8">
+                    <h3 className="font-500 sm:text-5xl mb-4 lg:text-3xl bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                      Connect Wallet
+                    </h3>
+                    <p className="text-sm text-center text-gray-400">
+                      Use the button below to connect your wallet. Once
+                      connected, we will store the address securely in your
+                      browser so that it persists between visits.
+                    </p>
+                  </div>
                   <div className="flex items-center justify-center m-auto  ">
                     <ConnectButton
-                    label="Connect & Save"
-                    chainStatus="icon"
-                    showBalance={{ smallScreen: false, largeScreen: false }}
-                  />
+                      label="Connect & Save"
+                      chainStatus="icon"
+                      showBalance={{ smallScreen: false, largeScreen: false }}
+                    />
                   </div>
                   {activeAddress ? (
                     <p className="text-sm text-green-400 ">

@@ -44,10 +44,17 @@ export const RANK_NAMES = {
   5: 'Legacy Ambassador',
 } as const;
 
-export const DEFAULT_REFERRER = '0xc607CD122fF8d21fbaECc4305aFE1E357d624137' as const;
+export const DEFAULT_REFERRER = '0xA367c6792f73489D734D00F8C5cF860801304Cc6' as const;
 
 // export const TEST_USER_ADDRESS = '0x269787a8BAb328b377709Ad330DBEfB4d4c1fEb8' as const;
 export const TEST_USER_ADDRESS = '' as const;
+
+export const WALLET_STORAGE = {
+  localKey: 'ethan:registeredWallet',
+  sessionKey: 'ethan:registeredWalletSession',
+  cacheName: 'ethan-wallet-cache',
+  cacheUrl: '/ethan-wallet-address',
+} as const;
 
 export const TOKEN_INFO = {
   name: 'ETHAN',
