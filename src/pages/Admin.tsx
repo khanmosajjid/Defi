@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-hot-toast";
-import { formatUnits } from "viem";
+import { formatUnits, parseEther } from "viem";
 
 import { CONTRACT_ADDRESSES } from "@/lib/constants";
 import {
@@ -58,6 +58,17 @@ function normalizeAddress(value: string) {
   return `0x${trimmed.slice(2).toLowerCase()}`;
 }
 
+function toBigIntOrZero(value: unknown): bigint {
+  if (typeof value === "bigint") return value;
+  if (value == null) return 0n;
+  try {
+    if (typeof value === "number") return BigInt(Math.trunc(value));
+    return BigInt(value.toString());
+  } catch {
+    return 0n;
+  }
+}
+
 type ReadFunctionDefinition = {
   id: string;
   label: string;
@@ -101,6 +112,8 @@ const Admin = () => {
     tokenPriceUsd,
     manualTokenPrice,
     dailyRatePercent,
+    tokenBalance,
+    tokenAllowance,
     fetchUsersBatch,
     fetchMemberDetails,
     fetchCompanyPoolStatus,
@@ -119,6 +132,8 @@ const Admin = () => {
     fetchStakeHistory,
     fetchUnstakeHistory,
     fetchTeamSize,
+    refetchTokenAllowance,
+    refetchTokenBalance,
   } = useStakingContract();
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -126,6 +141,7 @@ const Admin = () => {
   const [totalUsers, setTotalUsers] = useState(0);
   const [tableLoading, setTableLoading] = useState(false);
   const [poolLoading, setPoolLoading] = useState(false);
+  const [ownerStatsRefreshing, setOwnerStatsRefreshing] = useState(false);
   const [companyPool, setCompanyPool] = useState({
     poolBalance: "0",
     contractTokenBalance: "0",
@@ -194,6 +210,20 @@ const Admin = () => {
   );
   const manageBusy = manageAction !== null;
 
+  const ownerTokenBalanceBigInt = useMemo(
+    () => toBigIntOrZero(tokenBalance),
+    [tokenBalance]
+  );
+  const ownerAllowanceBigInt = useMemo(
+    () => toBigIntOrZero(tokenAllowance),
+    [tokenAllowance]
+  );
+  const ownerTokenBalanceDisplay = formatTokenAmount(
+    ownerTokenBalanceBigInt,
+    18
+  );
+  const ownerAllowanceDisplay = formatTokenAmount(ownerAllowanceBigInt, 18);
+
   const readFunctionDefs = useMemo<ReadFunctionDefinition[]>(
     () => [
       {
@@ -210,6 +240,33 @@ const Admin = () => {
             contractBalanceFormatted: formatTokenAmount(
               status.contractTokenBalance
             ),
+          };
+        },
+      },
+      {
+        id: "ownerWalletAllowance",
+        label: "Owner Wallet Allowance",
+        description: "balanceOf(owner) & allowance(owner, contract)",
+        requiresAddress: false,
+        run: async () => {
+          const [balanceResult, allowanceResult] = await Promise.allSettled([
+            refetchTokenBalance(),
+            refetchTokenAllowance(),
+          ]);
+          const balanceValue =
+            balanceResult.status === "fulfilled"
+              ? toBigIntOrZero(balanceResult.value.data)
+              : ownerTokenBalanceBigInt;
+          const allowanceValue =
+            allowanceResult.status === "fulfilled"
+              ? toBigIntOrZero(allowanceResult.value.data)
+              : ownerAllowanceBigInt;
+          return {
+            wallet: connectedAddress ?? null,
+            balanceRaw: balanceValue.toString(),
+            balanceFormatted: formatTokenAmount(balanceValue),
+            allowanceRaw: allowanceValue.toString(),
+            allowanceFormatted: formatTokenAmount(allowanceValue),
           };
         },
       },
@@ -359,6 +416,7 @@ const Admin = () => {
       },
     ],
     [
+      connectedAddress,
       dailyRatePercent,
       fetchCompanyPoolStatus,
       fetchMemberDetails,
@@ -370,6 +428,12 @@ const Admin = () => {
       fetchUnstakeHistory,
       fetchUserRoiHistory,
       manualTokenPrice,
+      ownerAllowanceBigInt,
+      ownerTokenBalanceBigInt,
+      refetchTokenAllowance,
+      refetchTokenBalance,
+      tokenAllowance,
+      tokenBalance,
       tokenPriceUsd,
       totalStaked,
     ]
@@ -402,6 +466,31 @@ const Admin = () => {
     if (manualTokenPrice && manualTokenPrice !== "0") return manualTokenPrice;
     return null;
   }, [manualTokenPrice, tokenPriceUsd]);
+
+  const handleRefreshOwnerWallet = useCallback(async () => {
+    if (!connectedAddress) {
+      toast.error("Connect a wallet to refresh stats");
+      return;
+    }
+    setOwnerStatsRefreshing(true);
+    try {
+      const results = await Promise.allSettled([
+        refetchTokenBalance(),
+        refetchTokenAllowance(),
+      ]);
+      const failed = results.some((result) => result.status === "rejected");
+      if (failed) {
+        toast.error("Failed to refresh owner wallet stats");
+      } else {
+        toast.success("Wallet stats refreshed");
+      }
+    } catch (error) {
+      console.error("refresh owner wallet stats failed", error);
+      toast.error("Failed to refresh owner wallet stats");
+    } finally {
+      setOwnerStatsRefreshing(false);
+    }
+  }, [connectedAddress, refetchTokenAllowance, refetchTokenBalance]);
 
   const tokenPriceDisplay = useMemo(() => {
     if (!tokenPriceSource) return "N/A";
@@ -703,12 +792,56 @@ const Admin = () => {
       return;
     }
 
+    let amountWei: bigint;
+    try {
+      amountWei = parseEther(trimmed);
+    } catch {
+      toast.error("Enter a valid numeric amount");
+      return;
+    }
+
     setFundingPool(true);
     try {
+      const [allowanceResult, balanceResult] = await Promise.allSettled([
+        refetchTokenAllowance(),
+        refetchTokenBalance(),
+      ]);
+
+      const latestAllowance =
+        allowanceResult.status === "fulfilled"
+          ? toBigIntOrZero(allowanceResult.value.data)
+          : ownerAllowanceBigInt;
+      const latestBalance =
+        balanceResult.status === "fulfilled"
+          ? toBigIntOrZero(balanceResult.value.data)
+          : ownerTokenBalanceBigInt;
+
+      if (latestBalance < amountWei) {
+        toast.error(
+          `Owner wallet balance is ${formatTokenAmount(
+            latestBalance
+          )} ETN, which is below the requested amount.`
+        );
+        return;
+      }
+
+      if (latestAllowance < amountWei) {
+        toast.error(
+          `Allowance to the contract is ${formatTokenAmount(
+            latestAllowance
+          )} ETN. Approve at least ${trimmed} ETN before funding.`
+        );
+        return;
+      }
+
       await fundCompanyPool(trimmed);
       setFundAmount("");
       const status = await fetchCompanyPoolStatus();
       setCompanyPool(status);
+      await Promise.allSettled([
+        refetchTokenAllowance(),
+        refetchTokenBalance(),
+      ]);
     } catch (error) {
       console.error("fundCompanyPool failed", error);
     } finally {
@@ -1158,6 +1291,38 @@ const Admin = () => {
                 >
                   {fundingPool ? "Funding…" : "Fund Pool"}
                 </Button>
+                <div className="rounded border border-yellow-500/10 bg-gray-900/50 p-3 text-xs text-gray-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Connected Wallet</span>
+                    <span className="text-yellow-400">
+                      {connectedAddress ? connectedAddress : "Not connected"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Wallet Balance</span>
+                    <span className="text-yellow-400">
+                      {ownerTokenBalanceDisplay} ETN
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Allowance to Contract</span>
+                    <span className="text-yellow-400">
+                      {ownerAllowanceDisplay} ETN
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 border-yellow-500/40 text-yellow-300"
+                    onClick={handleRefreshOwnerWallet}
+                    disabled={ownerStatsRefreshing}
+                  >
+                    {ownerStatsRefreshing
+                      ? "Refreshing…"
+                      : "Refresh Wallet Stats"}
+                  </Button>
+                </div>
                 <p className="text-xs text-gray-500">
                   Transfers ETN from the owner wallet into the company valuation
                   pool.
