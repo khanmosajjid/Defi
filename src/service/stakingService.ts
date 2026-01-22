@@ -39,7 +39,11 @@ const UNISWAP_V2_PAIR_ABI = [
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.stakingPlatform as `0x${string}`;
 const TOKEN_ADDRESS = CONTRACT_ADDRESSES.token as `0x${string}`;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const APPROVE_AMOUNT = 1_000_000n * 10n ** 18n;
+const addOnePercentBuffer = (amountWei: bigint) => {
+    if (amountWei <= 0n) return 0n;
+    const onePercent = (amountWei + 99n) / 100n;
+    return amountWei + onePercent;
+};
 const ONE_TOKEN = 10n ** 18n;
 
 function parsePositiveBigInt(value: string | undefined, fallback: bigint) {
@@ -640,7 +644,8 @@ export function useStakingContract() {
         } catch {
             // ignore
         }
-        if (BigInt(allowanceStr) >= amountWei) return;
+        const approveTargetWei = addOnePercentBuffer(amountWei);
+        if (BigInt(allowanceStr) >= approveTargetWei) return;
 
         const approveToast = toast.loading('Approving token spend...');
         try {
@@ -648,7 +653,7 @@ export function useStakingContract() {
                 abi: ERC20_ABI as Abi,
                 address: TOKEN_ADDRESS,
                 functionName: 'approve',
-                args: [CONTRACT_ADDRESS, APPROVE_AMOUNT],
+                args: [CONTRACT_ADDRESS, approveTargetWei],
             });
             toast.success('Approval confirmed', { id: approveToast });
             await Promise.allSettled([refetchTokenAllowance(), refetchTokenBalance()]);

@@ -92,14 +92,17 @@ export class SwapService {
     static async approveToken(
         tokenAddress: string,
         ownerAddress: string,
-        amount?: string,
+        amount?: string | bigint,
         spenderAddress: string = PANCAKESWAP_V2_ADDRESSES.ROUTER
     ): Promise<string> {
         try {
-            // If no amount is provided, or amount === 'max', approve the full uint256 max
-            const approveValue = (amount == null || amount === 'max')
-                ? BigInt(MAX_UINT)
-                : parseUnits(amount, 18);
+            // Prefer exact approvals. If amount is bigint, it's already in wei.
+            // If no amount is provided, or amount === 'max', approve the full uint256 max (legacy behavior).
+            const approveValue = typeof amount === 'bigint'
+                ? amount
+                : (amount == null || amount === 'max')
+                    ? BigInt(MAX_UINT)
+                    : parseUnits(amount, 18);
             const { chainId, chain } = SwapService.getChainContext()
             const account = SwapService.resolveAccount(ownerAddress)
             if (!account) {

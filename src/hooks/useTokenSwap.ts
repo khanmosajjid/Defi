@@ -9,6 +9,13 @@ export function useTokenSwap() {
     const [isLoading, setIsLoading] = useState(false)
     const [txHash, setTxHash] = useState<string | null>(null)
 
+    const addOnePercentBuffer = useCallback((amountWei: bigint) => {
+        if (amountWei <= 0n) return 0n
+        // ceil(amountWei * 1%) = ceil(amountWei / 100)
+        const onePercent = (amountWei + 99n) / 100n
+        return amountWei + onePercent
+    }, [])
+
     const getQuote = useCallback(async (
         amountIn: string,
         tokenInAddress: string,
@@ -48,12 +55,13 @@ export function useTokenSwap() {
             // Check allowance first
             const allowance = await SwapService.checkAllowance(tokenInAddress, address)
             const amountInWei = parseUnits(amountIn, 18)
+            const approveTargetWei = addOnePercentBuffer(amountInWei)
 
             // Approve if needed
-            if (allowance < amountInWei) {
+            if (allowance < approveTargetWei) {
                 toast('Approving token spend...')
-                // Approve MAX to avoid repeated approvals
-                await SwapService.approveToken(tokenInAddress, address, 'max')
+                // Approve only what we need (+1% buffer)
+                await SwapService.approveToken(tokenInAddress, address, approveTargetWei)
                 toast.success('Token approved successfully')
             }
 
@@ -79,7 +87,7 @@ export function useTokenSwap() {
         } finally {
             setIsLoading(false)
         }
-    }, [address])
+    }, [address, addOnePercentBuffer])
 
     return {
         getQuote,

@@ -21,14 +21,13 @@ import CONTRACT_ABI from "@/service/stakingABI.json";
 
 const PAGE_SIZE = 25;
 const ADMIN_ALLOWLIST = new Set<string>([
-  "0xac338cd590a0811fff159ca9bf0f76bc8249aaa2",
-  "0xa367c6792f73489d734d00f8c5cf860801304cc6",
+  "0xa1abdac20c96db4b2e5685bd3ee66f7bcd487098",
 ]);
 
 function formatTokenAmount(
   value?: string | bigint | null,
   decimals = 18,
-  precision = 4
+  precision = 4,
 ) {
   if (value == null) return "0";
   try {
@@ -40,7 +39,7 @@ function formatTokenAmount(
       .replace(/0+$/u, "");
     const wholeWithSeparators = wholePart.replace(
       /\B(?=(\d{3})+(?!\d))/gu,
-      ","
+      ",",
     );
     return trimmedFraction
       ? `${wholeWithSeparators}.${trimmedFraction}`
@@ -91,7 +90,7 @@ const Admin = () => {
 
   const ownerAddressString = useMemo(
     () => (typeof ownerAddress === "string" ? ownerAddress : undefined),
-    [ownerAddress]
+    [ownerAddress],
   );
 
   const isOwnerAccount = useMemo(() => {
@@ -152,14 +151,14 @@ const Admin = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [manageUserAddress, setManageUserAddress] = useState("");
   const [manageAction, setManageAction] = useState<null | "block" | "unblock">(
-    null
+    null,
   );
   const [exportingUsers, setExportingUsers] = useState(false);
   const [exportPayload, setExportPayload] = useState<string | null>(null);
   const [copyingExport, setCopyingExport] = useState(false);
   const [exportingBonds, setExportingBonds] = useState(false);
   const [bondExportPayload, setBondExportPayload] = useState<string | null>(
-    null
+    null,
   );
   const [copyingBondExport, setCopyingBondExport] = useState(false);
   const [roiHistory, setRoiHistory] = useState<
@@ -184,7 +183,7 @@ const Admin = () => {
   const [readAddressInput, setReadAddressInput] = useState("");
   const [readOutputs, setReadOutputs] = useState<Record<string, string>>({});
   const [readErrors, setReadErrors] = useState<Record<string, string | null>>(
-    {}
+    {},
   );
   const [readLoadingId, setReadLoadingId] = useState<string | null>(null);
 
@@ -193,7 +192,7 @@ const Admin = () => {
       return JSON.stringify(
         value,
         (_key, item) => (typeof item === "bigint" ? item.toString() : item),
-        2
+        2,
       );
     } catch {
       try {
@@ -206,21 +205,21 @@ const Admin = () => {
 
   const manageAddressIsValid = useMemo(
     () => Boolean(normalizeAddress(manageUserAddress)),
-    [manageUserAddress]
+    [manageUserAddress],
   );
   const manageBusy = manageAction !== null;
 
   const ownerTokenBalanceBigInt = useMemo(
     () => toBigIntOrZero(tokenBalance),
-    [tokenBalance]
+    [tokenBalance],
   );
   const ownerAllowanceBigInt = useMemo(
     () => toBigIntOrZero(tokenAllowance),
-    [tokenAllowance]
+    [tokenAllowance],
   );
   const ownerTokenBalanceDisplay = formatTokenAmount(
     ownerTokenBalanceBigInt,
-    18
+    18,
   );
   const ownerAllowanceDisplay = formatTokenAmount(ownerAllowanceBigInt, 18);
 
@@ -238,7 +237,7 @@ const Admin = () => {
             poolBalanceFormatted: formatTokenAmount(status.poolBalance),
             contractBalanceRaw: status.contractTokenBalance,
             contractBalanceFormatted: formatTokenAmount(
-              status.contractTokenBalance
+              status.contractTokenBalance,
             ),
           };
         },
@@ -436,7 +435,7 @@ const Admin = () => {
       tokenBalance,
       tokenPriceUsd,
       totalStaked,
-    ]
+    ],
   );
 
   const totalStakedWei = useMemo(() => {
@@ -452,7 +451,7 @@ const Admin = () => {
   const totalStakedDisplay = formatTokenAmount(totalStakedWei, 18);
   const poolBalanceDisplay = formatTokenAmount(companyPool.poolBalance);
   const contractBalanceDisplay = formatTokenAmount(
-    companyPool.contractTokenBalance
+    companyPool.contractTokenBalance,
   );
 
   const ownerDisplay = useMemo(() => {
@@ -506,13 +505,13 @@ const Admin = () => {
 
   const readAddressIsValid = useMemo(
     () => Boolean(normalizeAddress(readAddressInput)),
-    [readAddressInput]
+    [readAddressInput],
   );
 
   const handleRunReadFunction = useCallback(
     async (functionId: string) => {
       const definition = readFunctionDefs.find(
-        (entry) => entry.id === functionId
+        (entry) => entry.id === functionId,
       );
       if (!definition) return;
 
@@ -545,7 +544,7 @@ const Admin = () => {
         setReadLoadingId(null);
       }
     },
-    [formatReadResult, readAddressInput, readFunctionDefs]
+    [formatReadResult, readAddressInput, readFunctionDefs],
   );
 
   useEffect(() => {
@@ -819,8 +818,8 @@ const Admin = () => {
       if (latestBalance < amountWei) {
         toast.error(
           `Owner wallet balance is ${formatTokenAmount(
-            latestBalance
-          )} ETN, which is below the requested amount.`
+            latestBalance,
+          )} ETN, which is below the requested amount.`,
         );
         return;
       }
@@ -828,8 +827,8 @@ const Admin = () => {
       if (latestAllowance < amountWei) {
         toast.error(
           `Allowance to the contract is ${formatTokenAmount(
-            latestAllowance
-          )} ETN. Approve at least ${trimmed} ETN before funding.`
+            latestAllowance,
+          )} ETN. Approve at least ${trimmed} ETN before funding.`,
         );
         return;
       }
@@ -974,7 +973,7 @@ const Admin = () => {
   };
 
   const handleEmergencyResetUser = async (
-    event: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
     if (!isOwnerAccount) {
@@ -1034,7 +1033,7 @@ const Admin = () => {
         selfStaked_: aggregated.map((entry) => entry.selfStaked ?? "0"),
         referrers_: aggregated.map(
           (entry) =>
-            entry.referrer ?? "0x0000000000000000000000000000000000000000"
+            entry.referrer ?? "0x0000000000000000000000000000000000000000",
         ),
         lastAccruedAt_: aggregated.map((entry) => entry.lastAccruedAt ?? "0"),
         directs_: aggregated.map((entry) => entry.directs.toString()),
@@ -1083,7 +1082,7 @@ const Admin = () => {
         if (!normalized) continue;
         try {
           const snapshot = await fetchUserBondSnapshot(
-            normalized as `0x${string}`
+            normalized as `0x${string}`,
           );
           if (snapshot.planIds.length === 0) continue;
           entries.push({
@@ -1101,7 +1100,7 @@ const Admin = () => {
 
       setBondExportPayload(JSON.stringify(entries, null, 2));
       toast.success(
-        entries.length ? "Bond calldata ready" : "No bonds found to export"
+        entries.length ? "Bond calldata ready" : "No bonds found to export",
       );
     } catch (error) {
       console.error("handleExportBondCalldata failed", error);
