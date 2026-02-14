@@ -967,7 +967,7 @@ export function useStakingContract() {
             const receipt = await writeAndWaitForReceipt({
                 abi: CONTRACT_ABI as Abi,
                 address: CONTRACT_ADDRESS,
-                functionName: 'unblockUser',
+                functionName: 'unBlockUser',
                 args: [target],
             });
             toast.success('User unblocked successfully', { id: txToast });
@@ -975,6 +975,21 @@ export function useStakingContract() {
         } catch (err) {
             console.error('unblockUser error', err);
             toast.error(getErrorMessage(err), { id: txToast });
+            throw err;
+        }
+    }
+
+    async function fetchUserBlockedStatus(target: `0x${string}`): Promise<boolean> {
+        try {
+            const result = await readContractSafe<boolean>({
+                address: CONTRACT_ADDRESS,
+                abi: CONTRACT_ABI as Abi,
+                functionName: 'blockedUsers',
+                args: [target],
+            });
+            return Boolean(result);
+        } catch (err) {
+            console.error('fetchUserBlockedStatus error', err);
             throw err;
         }
     }
@@ -2067,6 +2082,7 @@ export function useStakingContract() {
         withdrawBond,
         blockUser: blockUserAddress,
         unblockUser: unblockUserAddress,
+        fetchUserBlockedStatus,
         setDailyRatePercent,
         batchCompoundAllUsers: batchCompoundAllUsersRange,
         fundCompanyPool,

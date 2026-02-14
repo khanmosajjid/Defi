@@ -117,6 +117,7 @@ const Admin = () => {
     fetchMemberDetails,
     fetchCompanyPoolStatus,
     fetchTotalUsers,
+    fetchUserBlockedStatus,
     blockUser: blockUserOnChain,
     unblockUser: unblockUserOnChain,
     setDailyRatePercent,
@@ -151,6 +152,13 @@ const Admin = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [manageUserAddress, setManageUserAddress] = useState("");
   const [manageAction, setManageAction] = useState<null | "block" | "unblock">(
+    null,
+  );
+  const [manageBlockedStatus, setManageBlockedStatus] = useState<
+    boolean | null
+  >(null);
+  const [manageStatusLoading, setManageStatusLoading] = useState(false);
+  const [manageStatusError, setManageStatusError] = useState<string | null>(
     null,
   );
   const [exportingUsers, setExportingUsers] = useState(false);
@@ -207,7 +215,12 @@ const Admin = () => {
     () => Boolean(normalizeAddress(manageUserAddress)),
     [manageUserAddress],
   );
-  const manageBusy = manageAction !== null;
+  const manageBusy = manageAction !== null || manageStatusLoading;
+
+  useEffect(() => {
+    setManageBlockedStatus(null);
+    setManageStatusError(null);
+  }, [manageUserAddress]);
 
   const ownerTokenBalanceBigInt = useMemo(
     () => toBigIntOrZero(tokenBalance),
@@ -348,6 +361,21 @@ const Admin = () => {
         },
       },
       {
+        id: "blockedStatus",
+        label: "Blocked Status",
+        description: "blockedUsers(address)",
+        requiresAddress: true,
+        run: async (wallet?: `0x${string}`) => {
+          if (!wallet) throw new Error("Wallet address required");
+          const blocked = await fetchUserBlockedStatus(wallet);
+          return {
+            wallet,
+            blocked,
+            status: blocked ? "BLOCKED" : "ACTIVE",
+          };
+        },
+      },
+      {
         id: "teamSize",
         label: "Team Size",
         description: "getTeamSize(address)",
@@ -419,6 +447,7 @@ const Admin = () => {
       dailyRatePercent,
       fetchCompanyPoolStatus,
       fetchMemberDetails,
+      fetchUserBlockedStatus,
       fetchTeamSize,
       fetchTotalUsers,
       fetchUserBondSnapshot,
@@ -431,8 +460,6 @@ const Admin = () => {
       ownerTokenBalanceBigInt,
       refetchTokenAllowance,
       refetchTokenBalance,
-      tokenAllowance,
-      tokenBalance,
       tokenPriceUsd,
       totalStaked,
     ],
@@ -744,7 +771,9 @@ const Admin = () => {
     setManageAction("block");
     try {
       await blockUserOnChain(normalized as `0x${string}`);
-      setManageUserAddress("");
+      const latest = await fetchUserBlockedStatus(normalized as `0x${string}`);
+      setManageBlockedStatus(latest);
+      setManageStatusError(null);
     } catch (error) {
       console.error("blockUserOnChain failed", error);
     } finally {
@@ -765,11 +794,33 @@ const Admin = () => {
     setManageAction("unblock");
     try {
       await unblockUserOnChain(normalized as `0x${string}`);
-      setManageUserAddress("");
+      const latest = await fetchUserBlockedStatus(normalized as `0x${string}`);
+      setManageBlockedStatus(latest);
+      setManageStatusError(null);
     } catch (error) {
       console.error("unblockUserOnChain failed", error);
     } finally {
       setManageAction(null);
+    }
+  };
+
+  const handleCheckUserStatus = async () => {
+    const normalized = normalizeAddress(manageUserAddress);
+    if (!normalized) {
+      toast.error("Enter a valid wallet address to check");
+      return;
+    }
+    setManageStatusLoading(true);
+    setManageStatusError(null);
+    try {
+      const status = await fetchUserBlockedStatus(normalized as `0x${string}`);
+      setManageBlockedStatus(status);
+    } catch (error) {
+      console.error("fetchUserBlockedStatus failed", error);
+      setManageBlockedStatus(null);
+      setManageStatusError("Failed to fetch user status");
+    } finally {
+      setManageStatusLoading(false);
     }
   };
 
@@ -1812,6 +1863,33 @@ const Admin = () => {
                 onChange={(event) => setManageUserAddress(event.target.value)}
                 className="input-bg border-gray-700 text-white"
               />
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="text-xs">
+                  <span className="text-gray-400">Status:</span>{" "}
+                  {manageStatusLoading ? (
+                    <span className="text-gray-300">Checking…</span>
+                  ) : manageStatusError ? (
+                    <span className="text-red-400">{manageStatusError}</span>
+                  ) : manageBlockedStatus === null ? (
+                    <span className="text-gray-500">Unknown</span>
+                  ) : manageBlockedStatus ? (
+                    <span className="text-red-400 font-semibold">Blocked</span>
+                  ) : (
+                    <span className="text-emerald-400 font-semibold">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-yellow-500/40 text-yellow-400"
+                  onClick={handleCheckUserStatus}
+                  disabled={!manageAddressIsValid || manageBusy}
+                >
+                  {manageStatusLoading ? "Checking…" : "Check status"}
+                </Button>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button
@@ -1819,7 +1897,10 @@ const Admin = () => {
                 className="bg-red-600 hover:bg-red-500 text-white font-semibold"
                 onClick={handleBlockUser}
                 disabled={
-                  !manageAddressIsValid || manageBusy || !isOwnerAccount
+                  !manageAddressIsValid ||
+                  manageBusy ||
+                  !isOwnerAccount ||
+                  manageBlockedStatus === true
                 }
               >
                 {manageAction === "block" ? "Blocking…" : "Block User"}
@@ -1829,7 +1910,10 @@ const Admin = () => {
                 className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold"
                 onClick={handleUnblockUser}
                 disabled={
-                  !manageAddressIsValid || manageBusy || !isOwnerAccount
+                  !manageAddressIsValid ||
+                  manageBusy ||
+                  !isOwnerAccount ||
+                  manageBlockedStatus === false
                 }
               >
                 {manageAction === "unblock" ? "Unblocking…" : "Unblock User"}
