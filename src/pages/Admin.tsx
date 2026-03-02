@@ -68,6 +68,69 @@ function toBigIntOrZero(value: unknown): bigint {
   }
 }
 
+function toEpochSeconds(value: unknown): number | null {
+  if (value == null) return null;
+  let numeric: number;
+  if (typeof value === "bigint") {
+    numeric = Number(value);
+  } else if (typeof value === "number") {
+    numeric = value;
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^\d+$/u.test(trimmed)) return null;
+    numeric = Number.parseInt(trimmed, 10);
+  } else {
+    return null;
+  }
+
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  const seconds =
+    numeric > 1_000_000_000_000
+      ? Math.floor(numeric / 1000)
+      : Math.floor(numeric);
+  if (seconds <= 0) return null;
+  return seconds;
+}
+
+function formatEpochDateTime(value: unknown) {
+  const seconds = toEpochSeconds(value);
+  if (!seconds) return "-";
+  return new Date(seconds * 1000).toLocaleString();
+}
+
+function isEpochField(key: string) {
+  return /(?:timestamp|lastAccruedAt|startAt|endAt|startAts|endAts)$/iu.test(
+    key,
+  );
+}
+
+function withReadableDates(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => withReadableDates(entry));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+
+  for (const [key, raw] of Object.entries(record)) {
+    output[key] = withReadableDates(raw);
+
+    if (isEpochField(key)) {
+      if (Array.isArray(raw)) {
+        output[`${key}Local`] = raw.map((entry) => formatEpochDateTime(entry));
+      } else {
+        output[`${key}Local`] = formatEpochDateTime(raw);
+      }
+    }
+  }
+
+  return output;
+}
+
 type ReadFunctionDefinition = {
   id: string;
   label: string;
@@ -196,9 +259,10 @@ const Admin = () => {
   const [readLoadingId, setReadLoadingId] = useState<string | null>(null);
 
   const formatReadResult = useCallback((value: unknown) => {
+    const normalizedValue = withReadableDates(value);
     try {
       return JSON.stringify(
-        value,
+        normalizedValue,
         (_key, item) => (typeof item === "bigint" ? item.toString() : item),
         2,
       );
@@ -1698,8 +1762,11 @@ const Admin = () => {
                   </div>
                   <div className="flex justify-between">
                     <span>Last Accrued</span>
-                    <span className="text-yellow-300 font-medium">
-                      {searchResult.lastAccruedAt ?? "0"}
+                    <span
+                      className="text-yellow-300 font-medium"
+                      title={searchResult.lastAccruedAt ?? "0"}
+                    >
+                      {formatEpochDateTime(searchResult.lastAccruedAt)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -1743,7 +1810,7 @@ const Admin = () => {
                     <thead>
                       <tr className="text-left text-gray-400 border-b border-gray-800">
                         <th className="py-2 pr-4">Day</th>
-                        <th className="py-2 pr-4">Timestamp (s)</th>
+                        <th className="py-2 pr-4">Date &amp; Time</th>
                         <th className="py-2">Amount (ETN)</th>
                       </tr>
                     </thead>
@@ -1757,7 +1824,7 @@ const Admin = () => {
                             {entry.day}
                           </td>
                           <td className="py-3 pr-4 text-gray-200">
-                            {entry.timestamp}
+                            {formatEpochDateTime(entry.timestamp)}
                           </td>
                           <td className="py-3 text-yellow-200">
                             {formatTokenAmount(entry.amount)}
@@ -2028,7 +2095,7 @@ const Admin = () => {
                           {user.rank ?? "-"}
                         </td>
                         <td className="py-3 pr-4 text-yellow-200">
-                          {user.lastAccruedAt ?? "0"}
+                          {formatEpochDateTime(user.lastAccruedAt)}
                         </td>
                         <td className="py-3 pr-4 text-yellow-200">
                           {formatTokenAmount(user.originalStaked)}
