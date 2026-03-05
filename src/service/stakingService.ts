@@ -1520,6 +1520,39 @@ export function useStakingContract() {
         [fetchDownlinesByLevel, fetchMemberDetails]
     );
 
+    const fetchDownlineDetailsForAddress = useCallback(
+        async (rootAddress: `0x${string}`, maxDepth = 15): Promise<Record<number, DirectDetail[]>> => {
+            const depth = Math.max(1, Math.min(maxDepth, 15));
+            const levels: Record<number, string[]> = {};
+            const levelOne = await fetchDirectsForAddress(rootAddress);
+            levels[1] = levelOne;
+
+            let frontier = levelOne;
+            for (let current = 2; current <= depth; current++) {
+                if (!frontier.length) break;
+                const nextLevelArrays = await Promise.all(
+                    frontier.map((addr) => fetchDirectsForAddress(addr as `0x${string}`))
+                );
+                const next = nextLevelArrays.flat();
+                levels[current] = next;
+                frontier = next;
+            }
+
+            const entries = await Promise.all(
+                Object.entries(levels).map(async ([lvl, addrs]) => {
+                    const details = await fetchMemberDetails(addrs);
+                    return [Number(lvl), details] as const;
+                })
+            );
+
+            return entries.reduce<Record<number, DirectDetail[]>>((acc, [lvl, details]) => {
+                acc[lvl] = details;
+                return acc;
+            }, {});
+        },
+        [fetchDirectsForAddress, fetchMemberDetails]
+    );
+
     const buildHistoryPage = useCallback(
         (entries: HistoryEntry[], page: number, pageSize: number): HistoryPage => {
             const safePageSize = Math.max(1, pageSize);
@@ -2094,6 +2127,7 @@ export function useStakingContract() {
         buildHistoryPage,
         fetchDownlinesByLevel,
         fetchDownlineDetailsByLevel,
+        fetchDownlineDetailsForAddress,
         fetchMemberDetails,
         fetchStakeHistory,
         fetchUnstakeHistory,

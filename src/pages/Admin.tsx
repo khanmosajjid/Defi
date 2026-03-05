@@ -195,6 +195,7 @@ const Admin = () => {
     fetchStakeHistory,
     fetchUnstakeHistory,
     fetchTeamSize,
+    fetchDownlineDetailsForAddress,
     refetchTokenAllowance,
     refetchTokenBalance,
   } = useStakingContract();
@@ -237,6 +238,13 @@ const Admin = () => {
   >([]);
   const [roiLoading, setRoiLoading] = useState(false);
   const [roiError, setRoiError] = useState<string | null>(null);
+  const [attachedLevels, setAttachedLevels] = useState<
+    Record<number, DirectDetail[]>
+  >({});
+  const [attachedLevelsLoading, setAttachedLevelsLoading] = useState(false);
+  const [attachedLevelsError, setAttachedLevelsError] = useState<string | null>(
+    null,
+  );
   const [fundAmount, setFundAmount] = useState("");
   const [fundingPool, setFundingPool] = useState(false);
   const [ownershipAddressInput, setOwnershipAddressInput] = useState("");
@@ -651,6 +659,9 @@ const Admin = () => {
       setRoiHistory([]);
       setRoiError(null);
       setRoiLoading(false);
+      setAttachedLevels({});
+      setAttachedLevelsError(null);
+      setAttachedLevelsLoading(false);
       setFundAmount("");
       setOwnershipAddressInput("");
       setDailyRateInput("");
@@ -715,6 +726,52 @@ const Admin = () => {
       cancelled = true;
     };
   }, [fetchUserRoiHistory, hasPanelAccess, searchResult]);
+
+  useEffect(() => {
+    if (!hasPanelAccess) {
+      setAttachedLevels({});
+      setAttachedLevelsError(null);
+      setAttachedLevelsLoading(false);
+      return;
+    }
+    if (!searchResult) {
+      setAttachedLevels({});
+      setAttachedLevelsError(null);
+      setAttachedLevelsLoading(false);
+      return;
+    }
+
+    const normalized = normalizeAddress(searchResult.address);
+    if (!normalized) {
+      setAttachedLevels({});
+      setAttachedLevelsError("Invalid wallet address");
+      setAttachedLevelsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAttachedLevelsLoading(true);
+    setAttachedLevelsError(null);
+
+    fetchDownlineDetailsForAddress(normalized as `0x${string}`, 15)
+      .then((levels) => {
+        if (cancelled) return;
+        setAttachedLevels(levels);
+      })
+      .catch((error) => {
+        console.error("fetchDownlineDetailsForAddress failed", error);
+        if (cancelled) return;
+        setAttachedLevels({});
+        setAttachedLevelsError("Failed to load attached levels");
+      })
+      .finally(() => {
+        if (!cancelled) setAttachedLevelsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchDownlineDetailsForAddress, hasPanelAccess, searchResult]);
 
   useEffect(() => {
     if (!hasPanelAccess) return;
@@ -1244,6 +1301,22 @@ const Admin = () => {
     totalUsers === 0 ? 0 : Math.min(totalUsers, (pageIndex + 1) * PAGE_SIZE);
   const totalPages = totalUsers === 0 ? 0 : Math.ceil(totalUsers / PAGE_SIZE);
   const hasNextPage = (pageIndex + 1) * PAGE_SIZE < totalUsers;
+  const attachedLevelEntries = useMemo(
+    () =>
+      Object.entries(attachedLevels)
+        .map(([level, members]) => [Number(level), members] as const)
+        .filter(([, members]) => members.length > 0)
+        .sort((a, b) => a[0] - b[0]),
+    [attachedLevels],
+  );
+  const attachedMemberCount = useMemo(
+    () =>
+      attachedLevelEntries.reduce(
+        (total, [, members]) => total + members.length,
+        0,
+      ),
+    [attachedLevelEntries],
+  );
 
   if (!connectedAddress) {
     return (
@@ -1776,6 +1849,123 @@ const Admin = () => {
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {searchResult && (
+              <div className="input-bg border border-yellow-500/20 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs text-gray-300 uppercase tracking-wide">
+                    Attached Levels (All Users + Details)
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    Members: {attachedMemberCount.toLocaleString()}
+                  </span>
+                </div>
+
+                {attachedLevelsError ? (
+                  <p className="text-sm text-red-400">{attachedLevelsError}</p>
+                ) : attachedLevelsLoading ? (
+                  <p className="text-sm text-gray-400">
+                    Loading attached levels…
+                  </p>
+                ) : attachedLevelEntries.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    No attached levels found for this user.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {attachedLevelEntries.map(([levelIndex, members]) => (
+                      <div key={`level-${levelIndex}`} className="space-y-2">
+                        <div className="text-sm text-yellow-300 font-medium">
+                          Level {levelIndex} ({members.length})
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-gray-400 border-b border-gray-800">
+                                <th className="py-2 pr-4">Address</th>
+                                <th className="py-2 pr-4">Referrer</th>
+                                <th className="py-2 pr-4">Directs</th>
+                                <th className="py-2 pr-4">Level</th>
+                                <th className="py-2 pr-4">Rank</th>
+                                <th className="py-2 pr-4">Last Accrued</th>
+                                <th className="py-2 pr-4">Self Staked (ETN)</th>
+                                <th className="py-2 pr-4">Pending ROI (ETN)</th>
+                                <th className="py-2">Stake + Accrued (ETN)</th>
+                                <th className="py-2 pr-4">
+                                  Total ROI Earned (ETN)
+                                </th>
+                                <th className="py-2 pr-4">
+                                  Total Level Reward (ETN)
+                                </th>
+                                <th className="py-2 pr-4">
+                                  Total Referral (ETN)
+                                </th>
+                                <th className="py-2">Total Withdrawn (ETN)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {members.map((member) => (
+                                <tr
+                                  key={`${levelIndex}-${member.address}`}
+                                  className="border-b border-gray-900/80"
+                                >
+                                  <td className="py-2 pr-4 text-yellow-200 break-all">
+                                    {member.address}
+                                  </td>
+                                  <td
+                                    className="py-2 pr-4 text-gray-200 break-all"
+                                    title={member.referrer}
+                                  >
+                                    {member.referrerShort}
+                                  </td>
+                                  <td className="py-2 pr-4 text-gray-200">
+                                    {member.directs.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 pr-4 text-gray-200">
+                                    {member.level || "-"}
+                                  </td>
+                                  <td className="py-2 pr-4 text-gray-200">
+                                    {member.rank ?? "-"}
+                                  </td>
+                                  <td className="py-2 pr-4 text-yellow-200">
+                                    {formatEpochDateTime(member.lastAccruedAt)}
+                                  </td>
+                                  <td className="py-2 pr-4 text-yellow-200">
+                                    {formatTokenAmount(member.selfStaked)}
+                                  </td>
+                                  <td className="py-2 pr-4 text-yellow-200">
+                                    {formatTokenAmount(member.pendingRoi)}
+                                  </td>
+                                  <td className="py-2 text-yellow-200">
+                                    {formatTokenAmount(member.stakeWithAccrued)}
+                                  </td>
+                                  <td className="py-2 pr-4 text-yellow-200">
+                                    {formatTokenAmount(member.totalRoiEarned)}
+                                  </td>
+                                  <td className="py-2 pr-4 text-yellow-200">
+                                    {formatTokenAmount(
+                                      member.totalLevelRewardEarned,
+                                    )}
+                                  </td>
+                                  <td className="py-2 pr-4 text-yellow-200">
+                                    {formatTokenAmount(
+                                      member.totalReferralIncome,
+                                    )}
+                                  </td>
+                                  <td className="py-2 text-yellow-200">
+                                    {formatTokenAmount(member.totalWithdrawn)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
