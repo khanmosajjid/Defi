@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -243,6 +244,18 @@ const Admin = () => {
   >({});
   const [attachedLevelsLoading, setAttachedLevelsLoading] = useState(false);
   const [attachedLevelsError, setAttachedLevelsError] = useState<string | null>(
+    null,
+  );
+  const [expandedUserAddress, setExpandedUserAddress] = useState<string | null>(
+    null,
+  );
+  const [expandedUserLevels, setExpandedUserLevels] = useState<
+    Record<string, Record<number, DirectDetail[]>>
+  >({});
+  const [expandedUserLoadingAddress, setExpandedUserLoadingAddress] = useState<
+    string | null
+  >(null);
+  const [expandedUserError, setExpandedUserError] = useState<string | null>(
     null,
   );
   const [fundAmount, setFundAmount] = useState("");
@@ -662,6 +675,10 @@ const Admin = () => {
       setAttachedLevels({});
       setAttachedLevelsError(null);
       setAttachedLevelsLoading(false);
+      setExpandedUserAddress(null);
+      setExpandedUserLevels({});
+      setExpandedUserLoadingAddress(null);
+      setExpandedUserError(null);
       setFundAmount("");
       setOwnershipAddressInput("");
       setDailyRateInput("");
@@ -1316,6 +1333,50 @@ const Admin = () => {
         0,
       ),
     [attachedLevelEntries],
+  );
+
+  const handleToggleUserLevels = useCallback(
+    async (address: string) => {
+      const normalized = normalizeAddress(address);
+      if (!normalized) {
+        toast.error("Invalid user wallet address");
+        return;
+      }
+
+      const normalizedLower = normalized.toLowerCase();
+      if (expandedUserAddress === normalizedLower) {
+        setExpandedUserAddress(null);
+        setExpandedUserError(null);
+        return;
+      }
+
+      setExpandedUserAddress(normalizedLower);
+      setExpandedUserError(null);
+
+      if (expandedUserLevels[normalizedLower]) {
+        return;
+      }
+
+      setExpandedUserLoadingAddress(normalizedLower);
+      try {
+        const levels = await fetchDownlineDetailsForAddress(
+          normalized as `0x${string}`,
+          15,
+        );
+        setExpandedUserLevels((prev) => ({
+          ...prev,
+          [normalizedLower]: levels,
+        }));
+      } catch (error) {
+        console.error("fetchDownlineDetailsForAddress row failed", error);
+        setExpandedUserError("Failed to load attached levels for this user");
+      } finally {
+        setExpandedUserLoadingAddress((current) =>
+          current === normalizedLower ? null : current,
+        );
+      }
+    },
+    [expandedUserAddress, expandedUserLevels, fetchDownlineDetailsForAddress],
   );
 
   if (!connectedAddress) {
@@ -2223,6 +2284,7 @@ const Admin = () => {
                   <th className="py-2 pr-4">Address</th>
                   <th className="py-2 pr-4">Referrer</th>
                   <th className="py-2 pr-4">Directs</th>
+                  <th className="py-2 pr-4">Levels</th>
                   <th className="py-2 pr-4">Level</th>
                   <th className="py-2 pr-4">Rank</th>
                   <th className="py-2 pr-4">Last Accrued</th>
@@ -2243,13 +2305,13 @@ const Admin = () => {
               <tbody>
                 {tableLoading ? (
                   <tr>
-                    <td colSpan={18} className="py-6 text-center text-gray-500">
+                    <td colSpan={19} className="py-6 text-center text-gray-500">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={18} className="py-6 text-center text-gray-500">
+                    <td colSpan={19} className="py-6 text-center text-gray-500">
                       No users found.
                     </td>
                   </tr>
@@ -2259,71 +2321,223 @@ const Admin = () => {
                       searchResult &&
                       searchResult.address.toLowerCase() ===
                         user.address.toLowerCase();
+                    const rowAddressLower = user.address.toLowerCase();
+                    const isExpanded = expandedUserAddress === rowAddressLower;
+                    const isExpandedLoading =
+                      expandedUserLoadingAddress === rowAddressLower;
+                    const rowLevels =
+                      expandedUserLevels[rowAddressLower] ?? null;
+                    const rowLevelEntries = rowLevels
+                      ? Object.entries(rowLevels)
+                          .map(
+                            ([level, members]) =>
+                              [Number(level), members] as const,
+                          )
+                          .filter(([, members]) => members.length > 0)
+                          .sort((a, b) => a[0] - b[0])
+                      : [];
                     return (
-                      <tr
-                        key={user.address}
-                        className={`border-b border-gray-900/80 ${
-                          highlight ? "bg-yellow-500/10" : ""
-                        }`}
-                      >
-                        <td className="py-3 pr-4 text-yellow-300 break-all">
-                          {user.address}
-                        </td>
-                        <td
-                          className="py-3 pr-4 text-gray-200 break-all"
-                          title={user.referrer}
+                      <Fragment key={user.address}>
+                        <tr
+                          key={user.address}
+                          className={`border-b border-gray-900/80 ${
+                            highlight ? "bg-yellow-500/10" : ""
+                          }`}
                         >
-                          {user.referrerShort}
-                        </td>
-                        <td className="py-3 pr-4 text-gray-200">
-                          {user.directs.toLocaleString()}
-                        </td>
-                        <td className="py-3 pr-4 text-gray-200">
-                          {user.level || "-"}
-                        </td>
-                        <td className="py-3 pr-4 text-gray-200">
-                          {user.rank ?? "-"}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatEpochDateTime(user.lastAccruedAt)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.originalStaked)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.originalUsdLocked)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.selfStaked)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.selfStakedUsdLocked)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.activeBondValue)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.stakeWithAccrued)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.pendingRoi)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.totalRoiEarned)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.totalLevelRewardEarned)}
-                        </td>
-                        <td className="py-3 pr-4 text-yellow-200">
-                          {formatTokenAmount(user.referralIncome)}
-                        </td>
-                        <td className="py-3 text-yellow-200">
-                          {formatTokenAmount(user.totalReferralIncome)}
-                        </td>
-                        <td className="py-3 text-yellow-200">
-                          {formatTokenAmount(user.totalWithdrawn)}
-                        </td>
-                      </tr>
+                          <td className="py-3 pr-4 text-yellow-300 break-all">
+                            {user.address}
+                          </td>
+                          <td
+                            className="py-3 pr-4 text-gray-200 break-all"
+                            title={user.referrer}
+                          >
+                            {user.referrerShort}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-200">
+                            {user.directs.toLocaleString()}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-200">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-yellow-500/40 text-yellow-300"
+                              disabled={isExpandedLoading}
+                              onClick={() =>
+                                void handleToggleUserLevels(user.address)
+                              }
+                            >
+                              {isExpandedLoading
+                                ? "Loading…"
+                                : isExpanded
+                                  ? "Hide Levels"
+                                  : "View Levels"}
+                            </Button>
+                          </td>
+                          <td className="py-3 pr-4 text-gray-200">
+                            {user.level || "-"}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-200">
+                            {user.rank ?? "-"}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatEpochDateTime(user.lastAccruedAt)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.originalStaked)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.originalUsdLocked)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.selfStaked)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.selfStakedUsdLocked)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.activeBondValue)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.stakeWithAccrued)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.pendingRoi)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.totalRoiEarned)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.totalLevelRewardEarned)}
+                          </td>
+                          <td className="py-3 pr-4 text-yellow-200">
+                            {formatTokenAmount(user.referralIncome)}
+                          </td>
+                          <td className="py-3 text-yellow-200">
+                            {formatTokenAmount(user.totalReferralIncome)}
+                          </td>
+                          <td className="py-3 text-yellow-200">
+                            {formatTokenAmount(user.totalWithdrawn)}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-gray-900/80 bg-gray-950/40">
+                            <td colSpan={19} className="py-3 px-2">
+                              {expandedUserError &&
+                              isExpandedLoading === false ? (
+                                <p className="text-sm text-red-400">
+                                  {expandedUserError}
+                                </p>
+                              ) : isExpandedLoading ? (
+                                <p className="text-sm text-gray-400">
+                                  Loading attached levels…
+                                </p>
+                              ) : rowLevelEntries.length === 0 ? (
+                                <p className="text-sm text-gray-400">
+                                  No attached levels found for this user.
+                                </p>
+                              ) : (
+                                <div className="space-y-4">
+                                  {rowLevelEntries.map(
+                                    ([levelIndex, members]) => (
+                                      <div
+                                        key={`${rowAddressLower}-level-${levelIndex}`}
+                                        className="space-y-2"
+                                      >
+                                        <div className="text-sm text-yellow-300 font-medium">
+                                          Level {levelIndex} ({members.length})
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                          <table className="min-w-full text-sm">
+                                            <thead>
+                                              <tr className="text-left text-gray-400 border-b border-gray-800">
+                                                <th className="py-2 pr-4">
+                                                  Address
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Referrer
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Directs
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Level
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Rank
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Last Accrued
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Self Staked (ETN)
+                                                </th>
+                                                <th className="py-2 pr-4">
+                                                  Pending ROI (ETN)
+                                                </th>
+                                                <th className="py-2">
+                                                  Stake + Accrued (ETN)
+                                                </th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {members.map((member) => (
+                                                <tr
+                                                  key={`${rowAddressLower}-${levelIndex}-${member.address}`}
+                                                  className="border-b border-gray-900/80"
+                                                >
+                                                  <td className="py-2 pr-4 text-yellow-200 break-all">
+                                                    {member.address}
+                                                  </td>
+                                                  <td
+                                                    className="py-2 pr-4 text-gray-200 break-all"
+                                                    title={member.referrer}
+                                                  >
+                                                    {member.referrerShort}
+                                                  </td>
+                                                  <td className="py-2 pr-4 text-gray-200">
+                                                    {member.directs.toLocaleString()}
+                                                  </td>
+                                                  <td className="py-2 pr-4 text-gray-200">
+                                                    {member.level || "-"}
+                                                  </td>
+                                                  <td className="py-2 pr-4 text-gray-200">
+                                                    {member.rank ?? "-"}
+                                                  </td>
+                                                  <td className="py-2 pr-4 text-yellow-200">
+                                                    {formatEpochDateTime(
+                                                      member.lastAccruedAt,
+                                                    )}
+                                                  </td>
+                                                  <td className="py-2 pr-4 text-yellow-200">
+                                                    {formatTokenAmount(
+                                                      member.selfStaked,
+                                                    )}
+                                                  </td>
+                                                  <td className="py-2 pr-4 text-yellow-200">
+                                                    {formatTokenAmount(
+                                                      member.pendingRoi,
+                                                    )}
+                                                  </td>
+                                                  <td className="py-2 text-yellow-200">
+                                                    {formatTokenAmount(
+                                                      member.stakeWithAccrued,
+                                                    )}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })
                 )}
