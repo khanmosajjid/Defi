@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { NAVIGATION_ITEMS } from "@/lib/constants";
+import { X } from "lucide-react";
 
 export default function Header() {
   const [, setIsOpen] = useState(false);
@@ -9,6 +10,20 @@ export default function Header() {
 
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [showBanner, setShowBanner] = useState(true);
+
+  useEffect(() => {
+    // Check if banner was closed by user
+    const bannerClosed = localStorage.getItem("maintenanceBannerClosed");
+    if (bannerClosed) {
+      setShowBanner(false);
+    }
+  }, []);
+
+  const handleCloseBanner = () => {
+    setShowBanner(false);
+    localStorage.setItem("maintenanceBannerClosed", "true");
+  };
 
   const handleScroll = () => {
     const currentScrollY = window.scrollY;
@@ -40,10 +55,31 @@ export default function Header() {
 
   return (
     <>
+      {/* System Update Banner */}
+      {showBanner && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-500/50 to-orange-500/50 border-b border-yellow-400 pt-3 pb-3 px-4 shadow-lg">
+          <div className="container mx-auto flex items-center justify-between gap-4">
+            <div className="text-center flex-1">
+              <p className="text-white text-sm md:text-base font-bold">
+                Thank you, Ethan members, for your patience. The system update
+                is in its final stage and will be back to normal between 11–15
+                May. We truly appreciate your support.
+              </p>
+            </div>
+            <button
+              onClick={handleCloseBanner}
+              className="ml-4 text-white hover:text-yellow-200 transition-colors flex-shrink-0 font-bold"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
       <header
         className={`sticky top-0 z-50 py-2 w-full border-b border-yellow-500/20 bg-black/90 backdrop-blur supports-[backdrop-filter]:bg-black/60  transition-transform duration-300 ${
           isVisible ? "translate-y-0" : "-translate-y-full"
         }`}
+        style={{ top: showBanner ? "52px" : "0" }}
       >
         <div className="container flex h-16 items-center justify-between px-4">
           {/* Logo */}
